@@ -135,13 +135,6 @@ while(config.count < 2*3):#*12 and config.numOfAGVs <= 10):
     
     graph = Graph(graph_processor)  # Assuming a Graph class has appropriate methods to handle updates
     
-    # U = 5  
-    # restricted_edges = [(2, 3), (4, 5)]  
-    # start_time_frame = 0
-    # end_time_frame = 10
-    # restriction_controller = RestrictionForTimeFrameController(graph, U, restricted_edges, start_time_frame, end_time_frame)
-    # print("[+] Test for restriction", restriction_controller.identify_restricted_edges())
-    
     events = []
     Event.setValue("number_of_nodes_in_space_graph", graph_processor.M) #sẽ phải đọc file Edges.txt để biết giá trị cụ thể
     Event.setValue("debug", 0)

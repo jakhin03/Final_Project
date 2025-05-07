@@ -1270,7 +1270,11 @@ class GraphProcessor:
         if self.restriction_for_timeframe_controller is None:
             self.restriction_for_timeframe_controller = RestrictionForTimeFrameController(self)
             self.restriction_for_timeframe_controller.apply_restriction()
-        # """Xử lý các hạn chế trong đồ thị."""
+            
+        self.insert_halting_edges()
+        self.write_to_file()
+
+        """Xử lý các hạn chế trong đồ thị."""
         # from controller.RestrictionController import RestrictionController
         # if self.restriction_controller is None:
         #     self.restriction_controller = RestrictionController(self)
@@ -1361,25 +1365,47 @@ class GraphProcessor:
         self.ts_edges.extend(e for e in new_a if e not in self.ts_edges)
         self.create_set_of_edges(new_a)
     
+    # def write_to_file(self):
+    #     M = max(target.id for target in self.get_targets())
+    #     with open('TSG.txt', 'w') as file:
+    #         file.write(f"p min {M} {len(self.ts_edges)}\n")
+    #         for start in self.started_nodes:
+    #             file.write(f"n {start} 1\n")
+    #         for target in self.get_targets():
+    #             target_id = target.id
+    #             file.write(f"n {target_id} -1\n")
+    #         #for edge in self.ts_edges:
+    #         for edge in self.tsedges:
+    #             if (edge is not None):   
+    #                 if(edge.weight == self.H*self.H):
+    #                     #pdb.set_trace()
+    #                     file.write(f"c Exceed {edge.weight} {edge.weight // self.M}\na {edge.start_node.id} {edge.end_node.id} {edge.lower} {edge.upper} {edge.weight}\n")
+    #                 else:
+    #                     file.write(f"a {edge.start_node.id} {edge.end_node.id} {edge.lower} {edge.upper} {edge.weight}\n")
+    #     if(self.print_out):
+    #         print("Đã cập nhật các cung mới vào file TSG.txt.")
+    
     def write_to_file(self):
         M = max(target.id for target in self.get_targets())
         with open('TSG.txt', 'w') as file:
             file.write(f"p min {M} {len(self.ts_edges)}\n")
-            for start in self.started_nodes:
-                file.write(f"n {start} 1\n")
-            for target in self.get_targets():
-                target_id = target.id
-                file.write(f"n {target_id} -1\n")
-            #for edge in self.ts_edges:
+            for node in self.ts_nodes:
+                if isinstance(node, (ArtificialNode)):
+                    file.write(f"c Node {node.id} is ArtificialNode\n")
+                demand = 1 if node.id in self.started_nodes else -1 if node.id in [target.id for target in self.target_nodes] else 0
+                print("started node", self.started_nodes)
+                file.write(f"n {node.id} {demand}\n")
+            
             for edge in self.tsedges:
-                if (edge is not None):   
-                    if(edge.weight == self.H*self.H):
-                        #pdb.set_trace()
-                        file.write(f"c Exceed {edge.weight} {edge.weight // self.M}\na {edge.start_node.id} {edge.end_node.id} {edge.lower} {edge.upper} {edge.weight}\n")
-                    else:
-                        file.write(f"a {edge.start_node.id} {edge.end_node.id} {edge.lower} {edge.upper} {edge.weight}\n")
-        if(self.print_out):
+                if edge is not None:
+                    if isinstance(edge.start_node, ArtificialNode) or isinstance(edge.end_node, ArtificialNode):
+                        file.write(f"c VirtualEdge between {edge.start_node.id} -> {edge.end_node.id}\n")
+                    if edge.weight == self.H * self.H:
+                        file.write(f"c Exceed {edge.weight} {edge.weight // self.M}\n")
+                    file.write(f"a {edge.start_node.id} {edge.end_node.id} {edge.lower} {edge.upper} {edge.weight}\n")
+        if self.print_out:
             print("Đã cập nhật các cung mới vào file TSG.txt.")
+
         
     def get_started_points(self):
         N = int(input("Nhập vào số lượng các xe AGV: "))
