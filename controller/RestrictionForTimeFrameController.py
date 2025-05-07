@@ -230,6 +230,8 @@ class RestrictionForTimeFrameController:
 
             # Add virtual nodes to graph
             self.graph_processor.check_and_add_nodes([vS_id, vD_id], is_artificial_node=True, label="Restriction")
+            self.graph_processor.ts_nodes.append(vS)
+            self.graph_processor.ts_nodes.append(vD)
             self.graph_processor.map_nodes.update({vS_id: vS, vD_id: vD})
 
             # Set demand for vS, vD
