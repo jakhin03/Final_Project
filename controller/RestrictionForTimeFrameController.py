@@ -170,7 +170,8 @@ class RestrictionForTimeFrameController:
             components[root].append(edge)
 
         return list(components.values())
-
+    
+    
     def identify_restricted_edges(self, restriction_edges: List[List[int]], start_time_frame: int, end_time_frame: int) -> List[Tuple[int, int, int, int, int]]:
         # Find edges in restriction time
         omega = []
@@ -313,7 +314,8 @@ class RestrictionForTimeFrameController:
             Nhập hệ số k (mặc định 2, k càng lớn thì cost vi phạm càng cao) cho gamma: 
         
         Trong thuật toán cũ:
-        - Tính F = sum(capacity) - U             
+        - Tính F = sum(capacity) - U   -> đây là hàm calculate_virtual_flow()
+        - Thêm Node và Edge thì tham khảo hàm apply_restriction()
         """
         # Duyệt từng restriction
         for restriction in self.restrictions:
