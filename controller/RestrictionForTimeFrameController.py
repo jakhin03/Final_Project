@@ -299,6 +299,7 @@ class RestrictionForTimeFrameController:
             + gamma là hệ số gamma của restriction
             + k là hệ số k của restriction
         - omega: Các cung trong restriction
+            + Mỗi cung trong omega có dạng: omega[0] = (source_id, dest_id, lower(min capacity), upper(max capacity), cost)
         - total_capacity: Tổng khả năng chứa của các cung trong restriction
         - virtual_flow (F): Lượng cần thiết để thoả mãn restriction 
         
