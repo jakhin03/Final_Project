@@ -302,6 +302,15 @@ class RestrictionForTimeFrameController:
                 
         return restricted_nodes_incoming_capacity
     
+    def calculate_outgoing_capacity_for_restricted_nodes(self, TSG: List[Tuple[int, int, int, int, int]], restricted_nodes) -> defaultdict:
+        # Identify restricted nodes in omega with edges go to nodes not in omega and their capacities
+        restricted_nodes_outgoing_capacity = defaultdict(int)
+        for source_id, dest_id, _, capacity, _ in TSG:
+            if source_id in restricted_nodes and dest_id not in restricted_nodes:
+                restricted_nodes_outgoing_capacity[source_id] += capacity
+                
+        return restricted_nodes_outgoing_capacity
+    
     
     def calulate_max_flow(self, TSG: List[Tuple[int, int, int, int, int]]) -> int:
         """
