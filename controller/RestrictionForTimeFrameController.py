@@ -284,6 +284,17 @@ class RestrictionForTimeFrameController:
             for source, dest, n in violations:
                 f.write(f"c Edge {source} {dest} violates {n} times\n")
     
+    
+    def indentify_restricted_nodes(self, omega: List[Tuple[int, int, int, int, int]]) -> set:
+        # Identify restricted nodes in omega
+        restricted_nodes = set()
+        for source_id, dest_id, _, _, _ in omega:
+            restricted_nodes.add(source_id)
+            restricted_nodes.add(dest_id)
+        return restricted_nodes
+    
+
+    
     def calulate_max_flow(self, TSG: List[Tuple[int, int, int, int, int]]) -> int:
         """
         Chú thích: 
