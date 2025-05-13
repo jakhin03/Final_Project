@@ -357,8 +357,20 @@ class RestrictionForTimeFrameController:
                 continue
 
         # TODO: Tính max flow F
-    
-
+    def calulate_max_flow(self , omega: List[Tuple[int, int, int, int, int]] , restricted_nodes_incoming_capacity , restricted_nodes_outgoing_capacity) -> int:
+        # Calculate max flow F
         
+        # Build graph
+        G = nx.DiGraph()
+        for source_id, dest_id, _, capacity, _ in omega:
+            G.add_edge(source_id, dest_id, capacity=capacity)
+            
+        # Add incoming edges for restricted nodes
+        for node_id, capacity in restricted_nodes_incoming_capacity.items():
+            G.add_edge("vS", node_id , capacity=capacity)
+        
+        # Add outgoing edges for restricted nodes
+        for node_id, capacity in restricted_nodes_outgoing_capacity.items():
+            G.add_edge(node_id, "vT", capacity=capacity)
                         
-        
+        return nx.maximum_flow_value(G, "vS", "vT")
