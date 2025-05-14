@@ -206,6 +206,11 @@ class RestrictionForTimeFrameController:
 
             if not omega:
                 print(f"Không tìm thấy cung nào trong restriction {restriction}")
+                dimacs_input, node_labels = self.make_dimacs_input(self.graph_processor.ts_edges, self.demands)
+                print("DIMACS input:")
+                print(dimacs_input)
+                print("Node labels:")
+                print(node_labels)
                 continue
 
             total_capacity = self.calculate_total_capacity(omega)
@@ -260,6 +265,67 @@ class RestrictionForTimeFrameController:
         print("Đã áp dụng tất cả restrictions thành công")
         # print("Kiểm tra lại vi phạm restrictions")
         # self.check_restriction_violations_from_graph(self.graph_processor._graph)
+
+    def make_dimacs_input(self, TSG: List[Tuple[int, int, int, int, int]], demands: Dict[int, int] = {}) -> Tuple[str, Dict[int, str]]:
+        """
+        Generates a DIMACS format string representing the Time-Space Graph (TSG).
+
+        Args:
+            TSG: A list of tuples, where each tuple represents an edge in the TSG
+                 in the format (source_id, dest_id, lower_capacity, upper_capacity, cost).
+            demands: A dictionary where keys are node IDs and values are their demands.
+                     Positive demand indicates a sink, negative indicates a source,
+                     and zero indicates a transshipment node.
+
+        Returns:
+            A tuple containing:
+                - A string in DIMACS format representing the TSG.
+                - A dictionary mapping node IDs to their labels (if available).
+        """
+        num_nodes = 0
+        edges_data = []
+        node_labels = {}
+
+        # Find all unique nodes and their labels
+        all_nodes = set()
+        for u, v, _, _, _ in TSG:
+            all_nodes.add(u)
+            all_nodes.add(v)
+            if u in self.graph_processor.map_nodes:
+                node_labels[u] = str(self.graph_processor.map_nodes[u].label)
+            else:
+                node_labels[u] = str(u)
+            if v in self.graph_processor.map_nodes:
+                node_labels[v] = str(self.graph_processor.map_nodes[v].label)
+            else:
+                node_labels[v] = str(v)
+
+        num_nodes = len(all_nodes)
+        indexed_nodes = {node: i + 1 for i, node in enumerate(sorted(list(all_nodes)))}
+        reverse_indexed_nodes = {i + 1: node for node, i in indexed_nodes.items()}
+
+        # Prepare edges in DIMACS format
+        for u, v, lower, upper, cost in TSG:
+            u_index = indexed_nodes[u]
+            v_index = indexed_nodes[v]
+            edges_data.append(f"a {u_index} {v_index} {lower} {upper} {cost}")
+
+        # Prepare demand in DIMACS format
+        demand_data = []
+        for node, demand in demands.items():
+            if node in indexed_nodes:
+                node_index = indexed_nodes[node]
+                demand_data.append(f"n {node_index} {demand}")
+
+        # Construct the DIMACS string
+        dimacs_str = f"p min {num_nodes} {len(edges_data)}\n"
+        dimacs_str += "\n".join(demand_data) + "\n" if demand_data else ""
+        dimacs_str += "\n".join(edges_data) + "\n"
+
+        # Create a mapping from DIMACS internal node IDs to original node labels
+        dimacs_node_labels = {i: node_labels.get(reverse_indexed_nodes[i], str(reverse_indexed_nodes[i])) for i in range(1, num_nodes + 1)}
+
+        return dimacs_str, dimacs_node_labels
 
     def check_restriction_violations_from_graph(self, G, file_path='TSG.txt'):
         violations = []
