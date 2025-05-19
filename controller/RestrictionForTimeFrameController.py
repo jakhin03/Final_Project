@@ -297,9 +297,8 @@ class RestrictionForTimeFrameController:
         # Identify restricted nodes in omega with edges come from nodes not in omega and their capacities
         restricted_nodes_incoming_capacity = defaultdict(int)
         for source_id, dest_id, _, capacity, _ in TSG:
-            if dest_id in restricted_nodes and source_id not in restricted_nodes:
+            if dest_id in restricted_nodes  and source_id not in restricted_nodes:
                 restricted_nodes_incoming_capacity[dest_id] += capacity
-                
         return restricted_nodes_incoming_capacity
     
     def calculate_outgoing_capacity_for_restricted_nodes(self, TSG: List[Tuple[int, int, int, int, int]], restricted_nodes) -> defaultdict:
