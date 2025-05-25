@@ -1350,6 +1350,8 @@ class GraphProcessor:
     def insert_halting_edges(self):
         halting_nodes = set()
         for edge in self.tsedges:
+            if edge is None or edge.end_node is None:
+                continue
             if(isinstance(edge.end_node, TimeWindowNode)):
                 continue
             time = edge.end_node.id // self.M - (1 if edge.end_node.id % self.M == 0 else 0)
