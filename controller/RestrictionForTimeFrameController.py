@@ -13,7 +13,15 @@ class RestrictionForTimeFrameController:
         self.graph_processor = graph_processor
         self.min_gamma = 200  # Ngưỡng tối thiểu cho gamma
         self.demands = {}  # Lưu demand cho các node ảo vS, vD
+        self._omega = []  # Lưu các edges trong omega
         
+    def get_omega(self) -> List[Tuple[int, int, int, int, int]]:
+        # Getter for omega
+        return self._omega
+    
+    def set_omega(self, omega: List[Tuple[int, int, int, int, int]]) -> None:
+        # Setter for omega
+        self._omega = omega
     
     # Class ArtificalNode ở đây kế thừa abstract artificialNode trong NodeGenerator
     class RestrictionArtificialNode(ArtificialNode):
@@ -191,7 +199,6 @@ class RestrictionForTimeFrameController:
                        (t1 <= end_time_frame <= t2) or \
                        (start_time_frame <= t1 and t2 <= end_time_frame):
                         omega.append((source_id, dest_id, 0, capacity, cost))
-                        
         return omega
 
     def apply_restriction(self) -> None:
@@ -206,6 +213,7 @@ class RestrictionForTimeFrameController:
             if not omega:
                 print(f"Không tìm thấy cung nào trong restriction {restriction}")
                 continue
+            self._omega.append(omega)
 
             total_capacity = self.calculate_total_capacity(omega)
             virtual_flow = self.calculate_virtual_flow(total_capacity, U)
@@ -284,7 +292,7 @@ class RestrictionForTimeFrameController:
                 f.write(f"c Edge {source} {dest} violates {n} times\n")
     
     
-    def indentify_restricted_nodes(self, omega: List[Tuple[int, int, int, int, int]]) -> set:
+    def identify_restricted_nodes(self, omega: List[Tuple[int, int, int, int, int]]) -> set:
         # Identify restricted nodes in omega
         restricted_nodes = set()
         for source_id, dest_id, _, _, _ in omega:
