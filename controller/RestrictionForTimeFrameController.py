@@ -319,7 +319,7 @@ class RestrictionForTimeFrameController:
         return restricted_nodes_outgoing_capacity
     
     
-    def calulate_max_flow(self , omega: List[Tuple[int, int, int, int, int]] , restricted_nodes_incoming_capacity , restricted_nodes_outgoing_capacity) -> int:
+    def calculate_max_flow(self , omega: List[Tuple[int, int, int, int, int]] , restricted_nodes_incoming_capacity , restricted_nodes_outgoing_capacity) -> int:
         # Calculate max flow F
         
         # Build graph
