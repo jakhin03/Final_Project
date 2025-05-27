@@ -1,5 +1,4 @@
 from controller.NodeGenerator import ArtificialNode
-from model.Edge import ArtificialEdge
 from collections import defaultdict
 from model.Graph import Graph
 from typing import List, Tuple, Set, Optional, Dict
@@ -14,7 +13,15 @@ class RestrictionForTimeFrameController:
         self.graph_processor = graph_processor
         self.min_gamma = 200  # Ngưỡng tối thiểu cho gamma
         self.demands = {}  # Lưu demand cho các node ảo vS, vD
+        self._omega = []  # Lưu các edges trong omega
         
+    def get_omega(self) -> List[Tuple[int, int, int, int, int]]:
+        # Getter for omega
+        return self._omega
+    
+    def set_omega(self, omega: List[Tuple[int, int, int, int, int]]) -> None:
+        # Setter for omega
+        self._omega = omega
     
     # Class ArtificalNode ở đây kế thừa abstract artificialNode trong NodeGenerator
     class RestrictionArtificialNode(ArtificialNode):
@@ -137,9 +144,9 @@ class RestrictionForTimeFrameController:
         # Sum capacity of edges in omega
         return sum(capacity for (_, _, _, capacity, _) in omega)
 
-    def calculate_virtual_flow(self, total_capacity: int, U: int) -> int:
+    def calculate_virtual_flow(self, max_flow: int, U: int) -> int:
         # Calculate needed virtual flow
-        return max(0, total_capacity - U)
+        return max(0, max_flow - U)
 
     def extract_weakly_connected_subgraph(self, graph: List[Tuple[int, int, int, int, int]]) -> List[List[Tuple[int, int, int, int, int]]]:
         # Get weakly connected subgraphs
@@ -192,7 +199,6 @@ class RestrictionForTimeFrameController:
                        (t1 <= end_time_frame <= t2) or \
                        (start_time_frame <= t1 and t2 <= end_time_frame):
                         omega.append((source_id, dest_id, 0, capacity, cost))
-                        
         return omega
 
     def apply_restriction(self) -> None:
@@ -207,12 +213,15 @@ class RestrictionForTimeFrameController:
             if not omega:
                 print(f"Không tìm thấy cung nào trong restriction {restriction}")
                 continue
-
-            total_capacity = self.calculate_total_capacity(omega)
-            virtual_flow = self.calculate_virtual_flow(total_capacity, U)
+            self._omega.append(omega)
+            
+            incoming_capacity = self.calculate_incoming_capacity_for_restricted_nodes(self.graph_processor.ts_edges, omega)
+            outgoing_capacity = self.calculate_outgoing_capacity_for_restricted_nodes(self.graph_processor.ts_edges, omega)
+            max_flow = self.calculate_max_flow(omega, outgoing_capacity, incoming_capacity)
+            virtual_flow = self.calculate_virtual_flow(max_flow, U)
 
             if virtual_flow < 0:
-                print(f"Lỗi: U ({U}) không thể lớn hơn capacity ({total_capacity})")
+                print(f"Lỗi: U ({U}) không thể lớn hơn max flow ({max_flow})")
                 continue
             elif virtual_flow == 0:
                 print(f"Đã thoả mãn restriction {restriction}")
@@ -284,53 +293,48 @@ class RestrictionForTimeFrameController:
             for source, dest, n in violations:
                 f.write(f"c Edge {source} {dest} violates {n} times\n")
     
-    def calulate_max_flow(self, TSG: List[Tuple[int, int, int, int, int]]) -> int:
-        """
-        Chú thích: 
-        - TSG: là một list gồm các edge của dồ thị
-            + VD một Edge có dạng: TSG[0] = (source_id, dest_id, lower(min capacity), upper(max capacity), cost)
-        - restrictions: là một list gồm các restriction
-            + Một restriction có dạng: restrictions[0] = (restriction_edges, start_time_frame, end_time_frame, U, priority, gamma, k)
-            + restriction_edges là một list gồm các edge bị giới hạn
-            + start_time_frame là thời gian bắt đầu của restriction
-            + end_time_frame là thời gian kết thúc của restriction
-            + U là số lượng AGV tối đa của restriction
-            + Dưới đây là các hệ số tính chi phí phạt:
-            + priority là độ ưu tiên của restriction
-            + gamma là hệ số gamma của restriction
-            + k là hệ số k của restriction
-        - omega: Các cung trong restriction
-            + Mỗi cung trong omega có dạng: omega[0] = (source_id, dest_id, lower(min capacity), upper(max capacity), cost)
-        - total_capacity: Tổng khả năng chứa của các cung trong restriction
-        - virtual_flow (F): Lượng cần thiết để thoả mãn restriction 
-        
-        Input mẫu:
-            Nhập số restrictions: 1
-            Nhập timeframe cho restriction thứ 1 (vd: 3 4): 3 4
-            Nhập các edges cho timeframe [3, 4] (vd 3 4 5 6 là 2 edge [3,4] và [5,6]): 1 2
-            Nhập số lượng AGV tối đa (U) cho restriction 1: 1
-            Nhập priority (>=0, mặc định 1) cho restriction 1: 
-            Nhập gamma (phí phạt, để trống thì tự động tính): 
-            Nhập hệ số k (mặc định 2, k càng lớn thì cost vi phạm càng cao) cho gamma: 
-        
-        Trong thuật toán cũ:
-        - Tính F = sum(capacity) - U   -> đây là hàm calculate_virtual_flow()
-        - Thêm Node và Edge thì tham khảo hàm apply_restriction()
-        """
-        # Duyệt từng restriction
-        for restriction in self.restrictions:
-            restriction_edges, start_time_frame, end_time_frame, U, priority, gamma, k = self.restriction_parser(restriction)
-            
-            # Các cung bị giới hạn
-            omega = self.identify_restricted_edges(restriction_edges, start_time_frame, end_time_frame)
-
-            if not omega:
-                print(f"Không tìm thấy cung nào trong restriction {restriction}")
-                continue
-
-        # TODO: Tính max flow F
     
-
+    def identify_restricted_nodes(self, omega: List[Tuple[int, int, int, int, int]]) -> set:
+        # Identify restricted nodes in omega
+        restricted_nodes = set()
+        for source_id, dest_id, _, _, _ in omega:
+            restricted_nodes.add(source_id)
+            restricted_nodes.add(dest_id)
+        return restricted_nodes
+    
+    
+    def calculate_incoming_capacity_for_restricted_nodes(self, TSG: List[Tuple[int, int, int, int, int]] , restricted_nodes) -> defaultdict:
+        # Identify restricted nodes in omega with edges come from nodes not in omega and their capacities
+        restricted_nodes_incoming_capacity = defaultdict(int)
+        for source_id, dest_id, _, capacity, _ in TSG:
+            if dest_id in restricted_nodes  and source_id not in restricted_nodes:
+                restricted_nodes_incoming_capacity[dest_id] += capacity
+        return restricted_nodes_incoming_capacity
+    
+    def calculate_outgoing_capacity_for_restricted_nodes(self, TSG: List[Tuple[int, int, int, int, int]], restricted_nodes) -> defaultdict:
+        # Identify restricted nodes in omega with edges go to nodes not in omega and their capacities
+        restricted_nodes_outgoing_capacity = defaultdict(int)
+        for source_id, dest_id, _, capacity, _ in TSG:
+            if source_id in restricted_nodes and dest_id not in restricted_nodes:
+                restricted_nodes_outgoing_capacity[source_id] += capacity
+                
+        return restricted_nodes_outgoing_capacity
+    
+    
+    def calculate_max_flow(self , omega: List[Tuple[int, int, int, int, int]] , restricted_nodes_incoming_capacity , restricted_nodes_outgoing_capacity) -> int:
+        # Calculate max flow F
         
+        # Build graph
+        G = nx.DiGraph()
+        for source_id, dest_id, _, capacity, _ in omega:
+            G.add_edge(source_id, dest_id, capacity=capacity)
+            
+        # Add incoming edges for restricted nodes
+        for node_id, capacity in restricted_nodes_incoming_capacity.items():
+            G.add_edge("vS", node_id , capacity=capacity)
+        
+        # Add outgoing edges for restricted nodes
+        for node_id, capacity in restricted_nodes_outgoing_capacity.items():
+            G.add_edge(node_id, "vT", capacity=capacity)
                         
-        
+        return nx.maximum_flow_value(G, "vS", "vT")
