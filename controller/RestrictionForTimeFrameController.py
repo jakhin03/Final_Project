@@ -136,9 +136,9 @@ class RestrictionForTimeFrameController:
         # Sum capacity of edges in omega
         return sum(capacity for (_, _, _, capacity, _) in omega)
 
-    def calculate_virtual_flow(self, total_capacity: int, U: int) -> int:
+    def calculate_virtual_flow(self, max_flow: int, U: int) -> int:
         # Calculate needed virtual flow
-        return max(0, total_capacity - U)
+        return max(0, max_flow - U)
 
     def extract_weakly_connected_subgraph(self, graph: List[Tuple[int, int, int, int, int]]) -> List[List[Tuple[int, int, int, int, int]]]:
         # Get weakly connected subgraphs
@@ -206,12 +206,14 @@ class RestrictionForTimeFrameController:
             if not omega:
                 print(f"Không tìm thấy cung nào trong restriction {restriction}")
                 continue
-
-            total_capacity = self.calculate_total_capacity(omega)
-            virtual_flow = self.calculate_virtual_flow(total_capacity, U)
+            
+            incoming_capacity = self.calculate_incoming_capacity_for_restricted_nodes(self.graph_processor.ts_edges, omega)
+            outgoing_capacity = self.calculate_outgoing_capacity_for_restricted_nodes(self.graph_processor.ts_edges, omega)
+            max_flow = self.calculate_max_flow(omega, outgoing_capacity, incoming_capacity)
+            virtual_flow = self.calculate_virtual_flow(max_flow, U)
 
             if virtual_flow < 0:
-                print(f"Lỗi: U ({U}) không thể lớn hơn capacity ({total_capacity})")
+                print(f"Lỗi: U ({U}) không thể lớn hơn max flow ({max_flow})")
                 continue
             elif virtual_flow == 0:
                 print(f"Đã thoả mãn restriction {restriction}")
@@ -312,7 +314,7 @@ class RestrictionForTimeFrameController:
         return restricted_nodes_outgoing_capacity
     
     
-    def calulate_max_flow(self , omega: List[Tuple[int, int, int, int, int]] , restricted_nodes_incoming_capacity , restricted_nodes_outgoing_capacity) -> int:
+    def calculate_max_flow(self , omega: List[Tuple[int, int, int, int, int]] , restricted_nodes_incoming_capacity , restricted_nodes_outgoing_capacity) -> int:
         # Calculate max flow F
         
         # Build graph
