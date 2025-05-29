@@ -13,14 +13,19 @@ class RestrictionForTimeFrameController:
         self.graph_processor = graph_processor
         self.min_gamma = 200  # Ngưỡng tối thiểu cho gamma
         self.demands = {}  # Lưu demand cho các node ảo vS, vD
-        self._omega = []  # Lưu các edges trong omega
+        self._omega = []
+        self._all_additional_edges = []
+        
+    def get_all_additional_edges(self) -> List[Tuple[int, int, int, int, int]]:
+        return self._all_additional_edges
+    
+    def set_all_additional_edges(self, edges: List[Tuple[int, int, int, int, int]]) -> None:
+        self._all_additional_edges = edges    
         
     def get_omega(self) -> List[Tuple[int, int, int, int, int]]:
-        # Getter for omega
         return self._omega
     
     def set_omega(self, omega: List[Tuple[int, int, int, int, int]]) -> None:
-        # Setter for omega
         self._omega = omega
     
     # Class ArtificalNode ở đây kế thừa abstract artificialNode trong NodeGenerator
