@@ -15,12 +15,12 @@ class RestrictionForTimeFrameController:
         self.demands = {}  # Lưu demand cho các node ảo vS, vD
         self._omega = []
         self._all_additional_edges = []
-        self._all_additional_nodes = []
+        self._all_additional_nodes = set()
         
-    def get_all_additional_nodes(self) -> List[int]:
+    def get_all_additional_nodes(self) -> Set[int]:
         return self._all_additional_nodes
     
-    def set_all_additional_nodes(self, nodes: List[int]) -> None:
+    def set_all_additional_nodes(self, nodes: Set[int]) -> None:
         self._all_additional_nodes = nodes    
         
     def get_all_additional_edges(self) -> List[Tuple[int, int, int, int, int]]:
