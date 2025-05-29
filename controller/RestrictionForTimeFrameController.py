@@ -229,7 +229,7 @@ class RestrictionForTimeFrameController:
             restriction_nodes = self.identify_restricted_nodes(omega)
             incoming_capacity = self.calculate_incoming_capacity_for_restricted_nodes(self.graph_processor.ts_edges, restriction_nodes)
             outgoing_capacity = self.calculate_outgoing_capacity_for_restricted_nodes(self.graph_processor.ts_edges, restriction_nodes)
-            max_flow = self.calculate_max_flow(omega, outgoing_capacity, incoming_capacity)
+            max_flow = self.calculate_max_flow(omega, incoming_capacity , outgoing_capacity)
             virtual_flow = self.calculate_virtual_flow(max_flow, U)
 
             if virtual_flow < 0:
