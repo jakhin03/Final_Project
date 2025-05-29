@@ -226,9 +226,9 @@ class RestrictionForTimeFrameController:
                 print(f"Không tìm thấy cung nào trong restriction {restriction}")
                 continue
             self._omega.append(omega)
-            
-            incoming_capacity = self.calculate_incoming_capacity_for_restricted_nodes(self.graph_processor.ts_edges, omega)
-            outgoing_capacity = self.calculate_outgoing_capacity_for_restricted_nodes(self.graph_processor.ts_edges, omega)
+            restriction_nodes = self.identify_restricted_nodes(omega)
+            incoming_capacity = self.calculate_incoming_capacity_for_restricted_nodes(self.graph_processor.ts_edges, restriction_nodes)
+            outgoing_capacity = self.calculate_outgoing_capacity_for_restricted_nodes(self.graph_processor.ts_edges, restriction_nodes)
             max_flow = self.calculate_max_flow(omega, outgoing_capacity, incoming_capacity)
             virtual_flow = self.calculate_virtual_flow(max_flow, U)
 
@@ -273,6 +273,7 @@ class RestrictionForTimeFrameController:
 
             # Escape edge (vS, vD) has cost = gamma
             new_edges.add((vS_id, vD_id, 0, self.H, int(round(gamma))))
+            
 
             # Update graph with new edges
             self.graph_processor.ts_edges.extend(e for e in new_edges if e not in self.graph_processor.ts_edges)
@@ -281,6 +282,10 @@ class RestrictionForTimeFrameController:
         print("Đã áp dụng tất cả restrictions thành công")
         # print("Kiểm tra lại vi phạm restrictions")
         # self.check_restriction_violations_from_graph(self.graph_processor._graph)
+
+    # def remove_artificial_artifact():
+         
+
 
     def check_restriction_violations_from_graph(self, G, file_path='TSG.txt'):
         violations = []
@@ -304,6 +309,8 @@ class RestrictionForTimeFrameController:
         with open(file_path, 'w') as f:
             for source, dest, n in violations:
                 f.write(f"c Edge {source} {dest} violates {n} times\n")
+    
+    
     
     
     def identify_restricted_nodes(self, omega: List[Tuple[int, int, int, int, int]]) -> set:
