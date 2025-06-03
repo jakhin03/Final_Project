@@ -287,32 +287,22 @@ class RestrictionForTimeFrameController:
         # self.check_restriction_violations_from_graph(self.graph_processor._graph)
 
     def remove_artificial_artifact(self):
-
         additional_nodes = self.get_all_additional_nodes()
-
-
         self.graph_processor.ts_nodes = [
             node for node in self.graph_processor.ts_nodes
             if node.id not in additional_nodes
         ]
-
-
+        self.set_all_additional_nodes(set())
         additional_edges = self.get_all_additional_edges()
-
         self.graph_processor.tsedges = [
             edge for edge in self.graph_processor.tsedges
             if all(edge.start_node.id != ae[0] or edge.end_node.id != ae[1] for ae in additional_edges)
         ]
-
         self.graph_processor.ts_edges = [
             edge for edge in self.graph_processor.ts_edges
             if all(edge[0] != ae[0] or edge[1] != ae[1] for ae in additional_edges)
         ]
-
-
-
-
-         
+        self.set_all_additional_edges([])
 
 
     def check_restriction_violations_from_graph(self, G, file_path='TSG.txt'):
