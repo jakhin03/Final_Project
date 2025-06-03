@@ -366,6 +366,9 @@ class RestrictionForTimeFrameController:
         for source_id, dest_id, _, capacity, _ in omega:
             G.add_edge(source_id, dest_id, capacity=capacity)
             
+        G.add_node("vS")
+        G.add_node("vT")
+        
         # Add incoming edges for restricted nodes
         for node_id, capacity in restricted_nodes_incoming_capacity.items():
             G.add_edge("vS", node_id , capacity=capacity)
