@@ -35,7 +35,13 @@ class RestrictionForTimeFrameController:
     
     def set_omega(self, omega: List[Tuple[int, int, int, int, int]]) -> None:
         self._omega = omega
+        
+    def get_restrictions_ts_edges(self) -> List[Tuple[int, int, int, int, int]]:
+        return self._restrictions_ts_edges
     
+    def set_restrictions_ts_edges(self, ts_edges: List[Tuple[int, int, int, int, int]]) -> None:
+        self._restrictions_ts_edges = ts_edges
+
     # Class ArtificalNode ở đây kế thừa abstract artificialNode trong NodeGenerator
     class RestrictionArtificialNode(ArtificialNode):
         def __init__(self, id: int, label: Optional[str] = None):
@@ -286,6 +292,7 @@ class RestrictionForTimeFrameController:
             vD = self.RestrictionArtificialNode(vD_id)
             self._all_additional_nodes.add(vS_id)
             self._all_additional_nodes.add(vD_id)
+            virtual_id = max_id + 2
 
             # Add virtual nodes to graph
             self.graph_processor.check_and_add_nodes([vS_id, vD_id], is_artificial_node=True, label="Restriction")
@@ -304,9 +311,24 @@ class RestrictionForTimeFrameController:
 
             # Create virtual edges
             new_edges = set()
+
+            additional_edges = self.get_all_additional_edges()
+
+    
             for source_id, dest_id, _, capacity, _ in omega:
-                new_edges.add((vS_id, source_id, 0, capacity, 0))
-                new_edges.add((dest_id, vD_id, 0, capacity, 0))
+                v1 = self.RestrictionArtificialNode(virtual_id)
+                self._all_additional_nodes.add(v1.id)
+                virtual_id+=1
+                v2 = self.RestrictionArtificialNode(virtual_id)
+                virtual_id+=1
+                self._all_additional_nodes.add(v2.id)
+                new_edges.add((vS_id, v1.id, 0, capacity, 0))
+                new_edges.add((v1.id, v2.id, 0, capacity, 0))
+                new_edges.add((v2.id, vD_id, 0, capacity, 0))
+                
+                self.graph_processor.tsedges = [ edge for edge in self.graph_processor.tsedges if not (edge.start_node.id == source_id and edge.end_node.id == dest_id) ]
+                
+                self.graph_processor.ts_edges = [ edge for edge in self.graph_processor.ts_edges if not (edge[0] == source_id and edge[1] == dest_id) ]
 
             # Escape edge (vS, vD) has cost = gamma
             new_edges.add((vS_id, vD_id, 0, self.H, int(round(gamma))))
@@ -338,6 +360,9 @@ class RestrictionForTimeFrameController:
             if all(edge[0] != ae[0] or edge[1] != ae[1] for ae in additional_edges)
         ]
         self.set_all_additional_edges([])
+        omegas = self.get_omega()
+        for omega in omegas:
+            self.graph_processor.create_set_of_edges(omega)
 
 
     def check_restriction_violations_from_graph(self, G, file_path='TSG.txt'):
