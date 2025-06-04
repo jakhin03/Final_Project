@@ -4,6 +4,7 @@ from model.Graph import Graph
 from typing import List, Tuple, Set, Optional, Dict
 import numpy as np
 import networkx as nx
+import config
 
 class RestrictionForTimeFrameController:
     def __init__(self, graph_processor):
@@ -70,66 +71,97 @@ class RestrictionForTimeFrameController:
 
     def get_restrictions(self) -> bool:
         # Get restrictions from user input, support priority and gamma
-        try:
-            L = int(input("Nhập số restrictions: "))
-            if L < 0:
-                print("Số restrictions phải lớn hơn hoặc bằng 0")
-                return False
+        self.restrictions = []  # Reset restrictions
+        if self.is_already_assigned():
+            timeframe = config.time_frame_for_restrictions
+            number_AGV = config.number_AGV_for_restrictions
+            ts_edges = config.ts_edges_for_restrictions
+            priority = config.priority
+            gamma = config.gamma
+            k = config.k
+            l = len(timeframe)
+            for i in range(l):
+                self.restrictions.append((ts_edges[i], timeframe[i], number_AGV[i], priority[i], gamma[i], k[i]))
+            return True
+        else:
+            try:
+                L = int(input("Nhập số restrictions: "))
+                if L < 0:
+                    print("Số restrictions phải lớn hơn hoặc bằng 0")
+                    return False
+                config.number_of_restrictions = []
+                config.time_frame_for_restrictions = []
+                config.edges_for_restrictions = []
+                config.number_AGV_for_restrictions = []
+                config.priority = []
+                config.gamma = []
+                config.k = []
+                config.ts_edges_for_restrictions = []
 
-            for i in range(L):
-                timeframe = list(map(int, input(f"Nhập timeframe cho restriction thứ {i+1} (vd: 3 4): ").split()))
-                restriction_nodes = list(map(int, input(f"    Nhập các edges cho timeframe {timeframe} (vd 3 4 5 6 là 2 edge [3,4] và [5,6]): ").split()))
+                for i in range(L):
+                    timeframe = list(map(int, input(f"Nhập timeframe cho restriction thứ {i+1} (vd: 3 4): ").split()))
+                    
+                    restriction_nodes = list(map(int, input(f"    Nhập các edges cho timeframe {timeframe} (vd 3 4 5 6 là 2 edge [3,4] và [5,6]): ").split()))
+                    
 
-                try:
-                    U = int(input(f"    Nhập số lượng AGV tối đa (U) cho restriction {i+1}: "))
-                except ValueError:
-                    print("U không hợp lệ")
-                    continue
+                    try:
+                        U = int(input(f"    Nhập số lượng AGV tối đa (U) cho restriction {i+1}: "))
+                    except ValueError:
+                        print("U không hợp lệ")
+                        continue
+                    
 
-                if len(restriction_nodes) % 2 != 0 or len(restriction_nodes) < 2:
-                    print("Restriction edge không hợp lệ")
-                    continue
+                    if len(restriction_nodes) % 2 != 0 or len(restriction_nodes) < 2:
+                        print("Restriction edge không hợp lệ")
+                        continue
 
-                restriction_edges = [[restriction_nodes[j], restriction_nodes[j+1]] for j in range(0, len(restriction_nodes), 2)]
+                    restriction_edges = [[restriction_nodes[j], restriction_nodes[j+1]] for j in range(0, len(restriction_nodes), 2)]
+                    config.ts_edges_for_restrictions.append(restriction_edges) 
 
-                # Nhập priority
-                try:
-                    priority = float(input(f"    Nhập priority (>=0, mặc định 1) cho restriction {i+1}: ") or 1.0)
-                    if priority < 0:
+                    # Nhập priority
+                    try:
+                        priority = float(input(f"    Nhập priority (>=0, mặc định 1) cho restriction {i+1}: ") or 1.0)
+                        if priority < 0:
+                            print("Priority không hợp lệ, dùng mặc định 1.0")
+                            priority = 1.0
+                    except ValueError:
                         print("Priority không hợp lệ, dùng mặc định 1.0")
                         priority = 1.0
-                except ValueError:
-                    print("Priority không hợp lệ, dùng mặc định 1.0")
-                    priority = 1.0
-
-                # Nhập gamma hoặc để tự động
-                gamma_input = input(f"    Nhập gamma (phí phạt, để trống thì tự động tính): ")
-                gamma = None
-                if gamma_input.strip():
+                    
+                    # Nhập gamma hoặc để tự động
+                    gamma_input = input(f"    Nhập gamma (phí phạt, để trống thì tự động tính): ")
+                    gamma = None
+                    if gamma_input.strip():
+                        try:
+                            gamma = float(gamma_input)
+                            if gamma < 1:
+                                print("Gamma quá nhỏ, dùng min_gamma = 1")
+                                gamma = 1.0
+                        except ValueError:
+                            print("Gamma không hợp lệ, sẽ tự động tính.")
+                            gamma = None
+                    
+                    # Nhập hệ số k nếu muốn
                     try:
-                        gamma = float(gamma_input)
-                        if gamma < 1:
-                            print("Gamma quá nhỏ, dùng min_gamma = 1")
-                            gamma = 1.0
+                        k = float(input(f"    Nhập hệ số k (mặc định 2, k càng lớn thì cost vi phạm càng cao) cho gamma: ") or 2)
                     except ValueError:
-                        print("Gamma không hợp lệ, sẽ tự động tính.")
-                        gamma = None
+                        k = 2
+                    
 
-                # Nhập hệ số k nếu muốn
-                try:
-                    k = float(input(f"    Nhập hệ số k (mặc định 2, k càng lớn thì cost vi phạm càng cao) cho gamma: ") or 2)
-                except ValueError:
-                    k = 2
+                    if self.validate_restriction(restriction_edges, timeframe, U):
+                        # Lưu cả priority, gamma, k vào restriction
+                        self.restrictions.append((restriction_edges, timeframe, U, priority, gamma, k))
+                    config.time_frame_for_restrictions.append(timeframe)
+                    config.edges_for_restrictions.append(restriction_nodes)
+                    config.number_AGV_for_restrictions.append(U)
+                    config.priority.append(priority)
+                    config.gamma.append(gamma)
+                    config.k.append(k)
+                return bool(self.restrictions)
 
-                if self.validate_restriction(restriction_edges, timeframe, U):
-                    # Lưu cả priority, gamma, k vào restriction
-                    self.restrictions.append((restriction_edges, timeframe, U, priority, gamma, k))
-
-            return bool(self.restrictions)
-
-        except ValueError as e:
-            print(f"Input error: {str(e)}")
-            return False
+            except ValueError as e:
+                print(f"Input error: {str(e)}")
+                return False
 
     def set_restrictions(self, restrictions_data: List[Tuple[List[List[int]], List[int], int, float, float, float]]) -> bool:
         # Set restrictions from data, support priority and gamma
@@ -212,6 +244,9 @@ class RestrictionForTimeFrameController:
                        (start_time_frame <= t1 and t2 <= end_time_frame):
                         omega.append((source_id, dest_id, 0, capacity, cost))
         return omega
+
+    def is_already_assigned(self) -> bool:
+        return config.number_of_restrictions != -1
 
     def apply_restriction(self) -> None:
         # Apply all restrictions to the graph
@@ -296,7 +331,7 @@ class RestrictionForTimeFrameController:
         additional_edges = self.get_all_additional_edges()
         self.graph_processor.tsedges = [
             edge for edge in self.graph_processor.tsedges
-            if all(edge.start_node.id != ae[0] or edge.end_node.id != ae[1] for ae in additional_edges)
+            if all(edge is None or edge.start_node.id != ae[0] or edge.end_node.id != ae[1] for ae in additional_edges)
         ]
         self.graph_processor.ts_edges = [
             edge for edge in self.graph_processor.ts_edges
