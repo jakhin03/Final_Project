@@ -50,7 +50,7 @@ class GraphProcessor:
         self._started_nodes = []
         self._print_out = True
         self._time_window_controller = None
-        self._restriction_for_timeframe_controller = None
+        # self._restriction_for_timeframe_controller = None
         self._restriction_controller = None
         self._start_ban = -1
         self._end_ban = -1
@@ -755,8 +755,10 @@ class GraphProcessor:
             self.graph.adjacency_list[source_id].append([dest_id, anEdge])
         
         # Add TimeWindowEdge and RestrictionEdge
-        self.time_window_controller.generate_time_window_edges(self.graph.nodes[source_id], self.graph.adjacency_list, self.graph.number_of_nodes_in_space_graph)
-        self.restriction_controller.generate_restriction_edges(self.graph.nodes[source_id], self.graph.nodes[dest_id], self.graph.nodes, self.graph.adjacency_list)
+        if self.time_window_controller: # Check if controller exists
+            self.time_window_controller.generate_time_window_edges(self.graph.nodes[source_id], self.graph.adjacency_list, self.graph.number_of_nodes_in_space_graph)
+        if self.restriction_controller: # Check if controller exists
+            self.restriction_controller.generate_restriction_edges(self.graph.nodes[source_id], self.graph.nodes[dest_id], self.graph.nodes, self.graph.adjacency_list)
 
     def version_check(self, current_time):
         """Kiểm tra nếu phiên bản cần được cập nhật."""
@@ -1267,12 +1269,15 @@ class GraphProcessor:
             self.tsedges.append(temp)
         
     def process_restrictions(self):
-        if self.restriction_for_timeframe_controller is None:
-            self.restriction_for_timeframe_controller = RestrictionForTimeFrameController(self)
-            self.restriction_for_timeframe_controller.apply_restriction()
-            
+        if self.restriction_controller is None:
+            self.restriction_controller = RestrictionForTimeFrameController(self)
+        
+        # Assuming apply_restriction is a method specific to RestrictionForTimeFrameController
+        # or defined in the abstract RestrictionController and implemented.
+        self.restriction_controller.apply_restriction()
         self.insert_halting_edges()
-        self.write_to_file()
+        self.write_to_file()         
+        
 
         """Xử lý các hạn chế trong đồ thị."""
         # from controller.RestrictionController import RestrictionController
