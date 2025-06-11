@@ -20,5 +20,5 @@ level_of_simulation = 0 #0 - "Fully Random", 1 - "Random in the list", 2 - "SFM"
 test_automation = 0
 draw = 0
 M = 0
-restrictions_data_cache = None
-restrictions_are_set_in_cache = False
+restrictions_data_cache = [[[[4, 1], [1, 2]], [2, 5], 1, 1.0, None, 2.0]]
+restrictions_are_set_in_cache = True
