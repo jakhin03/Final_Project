@@ -1272,8 +1272,6 @@ class GraphProcessor:
         if self.restriction_controller is None:
             self.restriction_controller = RestrictionForTimeFrameController(self)
         
-        # Assuming apply_restriction is a method specific to RestrictionForTimeFrameController
-        # or defined in the abstract RestrictionController and implemented.
         self.restriction_controller.apply_restriction()
         self.insert_halting_edges()
         self.write_to_file()         

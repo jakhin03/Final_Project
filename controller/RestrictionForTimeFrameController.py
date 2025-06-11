@@ -72,16 +72,22 @@ class RestrictionForTimeFrameController(RestrictionController): # Inherit from R
                 self.set_restrictions(config.restrictions_data_cache)
                 return bool(self.restrictions)
             else:
-                if config.restrictions_data_cache is None and hasattr(config, 'restrictions_are_set_in_cache'):
+                # This case implies cache was set, but data is None.
+                # This could happen if 0 restrictions were explicitly cached.
+                # If data is None and cache is true, it means 0 restrictions were intended.
+                if config.restrictions_data_cache is None:
+                    self.restrictions = []
+                    return False # No restrictions to process
+                # Fallback if cache is true but data is unexpectedly missing in a way not representing 0.
+                if hasattr(config, 'restrictions_are_set_in_cache'):
                      config.restrictions_are_set_in_cache = False # Reset to force prompt
 
         self.restrictions = [] # Clear existing restrictions before prompting
         try:
-            L_str = input("Nhập số restrictions: ")
+            L_str = input("Nhập số restrictions (để trống nếu không có restriction nào): ")
             if not L_str.strip(): # Handle empty input for L
-                print("Số restrictions không được để trống.")
-                if hasattr(config, 'restrictions_are_set_in_cache'): config.restrictions_are_set_in_cache = False
-                return False
+                self._save_restrictions_to_config() # Save the empty list of restrictions and set cache flag
+                return False # No restrictions to process
 
             L = int(L_str)
             if L < 0:
@@ -221,28 +227,43 @@ class RestrictionForTimeFrameController(RestrictionController): # Inherit from R
     def identify_restricted_edges(self, restriction_edges: List[List[int]], start_time_frame: int, end_time_frame: int) -> List[Tuple[int, int, int, int, int]]:
         # Find edges in restriction time
         omega = []
+        
+        actual_edge_object_ids = set()
+        # Ensure _graph_processor and tsedges exist and tsedges is iterable
+        if hasattr(self._graph_processor, 'tsedges') and self._graph_processor.tsedges is not None:
+            try:
+                for edge_obj in self._graph_processor.tsedges:
+                    # Ensure edge_obj and its nodes are valid before accessing id
+                    if hasattr(edge_obj, 'start_node') and hasattr(edge_obj.start_node, 'id') and \
+                       hasattr(edge_obj, 'end_node') and hasattr(edge_obj.end_node, 'id'):
+                        actual_edge_object_ids.add((edge_obj.start_node.id, edge_obj.end_node.id))
+            except TypeError: # Handles case where tsedges might not be iterable (e.g., None assigned incorrectly)
+                print("Warning: self._graph_processor.tsedges is not iterable in identify_restricted_edges.")
+                # actual_edge_object_ids will remain empty, and the filter below will effectively pass all edges from ts_edges
+                pass 
+
         list_W = self.extract_weakly_connected_subgraph(self._graph_processor.ts_edges)
         restriction_set = {(u, v) for u, v in restriction_edges}
-        print("H: ", self._H)
+
         for W_edges in list_W:
-            for edge in W_edges:
-                print("Checking edge:", edge)
-                source_id, dest_id, _, capacity, cost = edge
+            for edge_tuple in W_edges: # edge_tuple is (source_id, dest_id, lower_bound, capacity, cost)
+                source_id, dest_id, _, capacity, cost = edge_tuple # Unpack, original lower_bound from tuple is _
+                if actual_edge_object_ids and (source_id, dest_id) not in actual_edge_object_ids:
+                    continue
+
                 t1 = self._get_node_time(source_id)
                 s_source = self._get_node_coordinates(source_id)
                 t2 = self._get_node_time(dest_id)
                 s_dest = self._get_node_coordinates(dest_id)
                 base_edge = (s_source, s_dest)
-                print("Source node:", s_source, "Time:", t1, "Destination node:", s_dest, "Time:", t2, "Base edge:", base_edge)
+
                 if base_edge in restriction_set:
-                    print("Edge", base_edge, "is in restriction set")
                     if (t1 <= start_time_frame < t2) or \
                        (t1 < end_time_frame <= t2) or \
                        (start_time_frame <= t1 and t2 <= end_time_frame):
-                        omega.append((source_id, dest_id, 0, capacity, cost))
-                        print("Added edge to omega:", (source_id, dest_id, 0, capacity, cost))   
-                        
-                print()             
+                        # Appending with lower_bound 0 as per the original logic for omega
+                        print("Source and destination in restriction edges:", base_edge,"coordinate:", s_source, ",", s_dest ,"with time frame:", (t1, t2))
+                        omega.append((source_id, dest_id, 0, capacity, cost))     
         return omega
 
     def apply_restriction(self) -> None:
