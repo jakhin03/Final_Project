@@ -167,7 +167,7 @@ class NetworkXSolution:
         import time
         start_time = time.time()
         # Restriction 2 5 4 1 1 2
-        pdb.set_trace()
+        # pdb.set_trace()
         self.flowCost, self.flowDict = nx.network_simplex(G)
         end_time = time.time()
         config.timeSolving += (end_time - start_time)

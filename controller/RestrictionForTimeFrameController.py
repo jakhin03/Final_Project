@@ -327,7 +327,6 @@ class RestrictionForTimeFrameController(RestrictionController): # Inherit from R
             for edge_orig in omega_for_this_restriction:
                 u, v, l_orig, cap_orig, cost_orig = edge_orig
                 edges_to_remove_from_graph.add(edge_orig) # Mark original edge for removal
-
                 # Create intermediate virtual nodes for this edge_orig
                 max_node_id_val += 1
                 v_intermediate1_id = max_node_id_val

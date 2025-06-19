@@ -21,4 +21,4 @@ test_automation = 0
 draw = 0
 M = 0
 restrictions_data_cache = [[[[4, 1], [1, 2]], [2, 5], 1, 1.0, None, 2.0]]
-restrictions_are_set_in_cache = True
+restrictions_are_set_in_cache = False
