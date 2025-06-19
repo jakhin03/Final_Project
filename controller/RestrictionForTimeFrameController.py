@@ -43,27 +43,27 @@ class RestrictionForTimeFrameController(RestrictionController):
 
         # Xóa các nút ảo
         if additional_nodes_ids:
-            self.graph_processor.ts_nodes = [
-                node for node in self.graph_processor.ts_nodes
+            self._graph_processor.ts_nodes = [
+                node for node in self._graph_processor.ts_nodes
                 if node.id not in additional_nodes_ids
             ]
             for node_id in additional_nodes_ids:
-                self.graph_processor.map_nodes.pop(node_id, None)
+                self._graph_processor.map_nodes.pop(node_id, None)
 
         # Xóa các cung ảo
         if additional_edges_tuples:
             # Tạo một set từ tuple của các cung ảo để tìm kiếm nhanh hơn
             additional_edges_set = { (e[0], e[1]) for e in additional_edges_tuples }
             
-            # Xóa từ self.graph_processor.ts_edges (list of tuples)
-            self.graph_processor.ts_edges = [
-                edge for edge in self.graph_processor.ts_edges
+            # Xóa từ self._graph_processor.ts_edges (list of tuples)
+            self._graph_processor.ts_edges = [
+                edge for edge in self._graph_processor.ts_edges
                 if (edge[0], edge[1]) not in additional_edges_set
             ]
-            # Xóa từ self.graph_processor.tsedges (list of Edge objects)
-            if hasattr(self.graph_processor, 'tsedges'):
-                 self.graph_processor.tsedges = [
-                    edge_obj for edge_obj in self.graph_processor.tsedges
+            # Xóa từ self._graph_processor.tsedges (list of Edge objects)
+            if hasattr(self._graph_processor, 'tsedges'):
+                 self._graph_processor.tsedges = [
+                    edge_obj for edge_obj in self._graph_processor.tsedges
                     if hasattr(edge_obj, 'start_node') and (edge_obj.start_node.id, edge_obj.end_node.id) not in additional_edges_set
                 ]
 
@@ -73,8 +73,8 @@ class RestrictionForTimeFrameController(RestrictionController):
             if any((e[0], e[1]) in additional_edges_set for e in self.get_all_additional_edges()) # Heuristic to find which omega was processed
         }
         if original_edges_to_re_add:
-            self.graph_processor.ts_edges.extend(list(original_edges_to_re_add))
-            self.graph_processor.create_set_of_edges(original_edges_to_re_add)
+            self._graph_processor.ts_edges.extend(list(original_edges_to_re_add))
+            self._graph_processor.create_set_of_edges(original_edges_to_re_add)
 
         # Reset lại trạng thái
         self.set_all_additional_nodes(set())
@@ -252,7 +252,7 @@ class RestrictionForTimeFrameController(RestrictionController):
     def identify_restricted_edges(self, restriction_edges, start_time_frame, end_time_frame):
         omega = []
         restriction_set = {(u, v) for u, v in restriction_edges}
-        for edge_tuple in self.graph_processor.ts_edges:
+        for edge_tuple in self._graph_processor.ts_edges:
             source_id, dest_id, _, capacity, cost = edge_tuple
             t1 = self._get_node_time(source_id)
             t2 = self._get_node_time(dest_id)
@@ -312,8 +312,6 @@ class RestrictionForTimeFrameController(RestrictionController):
             G.add_edge(node_id, "vT", capacity=capacity)
                         
         return nx.maximum_flow_value(G, "vS", "vT")
-    
-    def calculate_virtual_flow(self, max_flow, U): #...
 
     def apply_restriction(self) -> None:
         if not self.get_restrictions():
@@ -323,7 +321,7 @@ class RestrictionForTimeFrameController(RestrictionController):
         if self._all_additional_nodes or self._all_additional_edges:
             self.remove_artificial_artifact()
 
-        max_node_id_val = self.graph_processor.get_max_id()
+        max_node_id_val = self._graph_processor.get_max_id()
 
         for restriction_item in self.restrictions:
             restriction_edges_config, start_time_frame, end_time_frame, U, priority, gamma_config, k_val = self.restriction_parser(restriction_item)
@@ -336,8 +334,8 @@ class RestrictionForTimeFrameController(RestrictionController):
             self._omega.extend(omega_for_this_restriction)
 
             current_restricted_nodes_set = self.identify_restricted_nodes(omega_for_this_restriction)
-            incoming_capacity = self.calculate_incoming_capacity_for_restricted_nodes(self.graph_processor.ts_edges, current_restricted_nodes_set)
-            outgoing_capacity = self.calculate_outgoing_capacity_for_restricted_nodes(self.graph_processor.ts_edges, current_restricted_nodes_set)
+            incoming_capacity = self.calculate_incoming_capacity_for_restricted_nodes(self._graph_processor.ts_edges, current_restricted_nodes_set)
+            outgoing_capacity = self.calculate_outgoing_capacity_for_restricted_nodes(self._graph_processor.ts_edges, current_restricted_nodes_set)
             
             flow_F_through_omega = self.calculate_max_flow(omega_for_this_restriction, incoming_capacity, outgoing_capacity)
             virtual_flow_needed = self.calculate_virtual_flow(flow_F_through_omega, U)
@@ -345,7 +343,7 @@ class RestrictionForTimeFrameController(RestrictionController):
             if virtual_flow_needed <= 0:
                 continue
 
-            final_gamma = int(round(gamma_config if gamma_config is not None else self.calculate_default_gamma(self.graph_processor.ts_edges, priority, k_val, self._min_gamma)))
+            final_gamma = int(round(gamma_config if gamma_config is not None else self.calculate_default_gamma(self._graph_processor.ts_edges, priority, k_val, self._min_gamma)))
             
             # Tạo nút ảo toàn cục cho ràng buộc này
             max_node_id_val += 1
@@ -358,9 +356,9 @@ class RestrictionForTimeFrameController(RestrictionController):
             
             # Thêm và theo dõi các nút ảo toàn cục
             self._all_additional_nodes.update([vS_global_id, vD_global_id])
-            self.graph_processor.check_and_add_nodes([vS_global_id, vD_global_id], is_artificial_node=True, label="GlobalRestrictionNode")
-            self.graph_processor.ts_nodes.extend([vS_global_node, vD_global_node])
-            self.graph_processor.map_nodes.update({vS_global_id: vS_global_node, vD_global_id: vD_global_node})
+            self._graph_processor.check_and_add_nodes([vS_global_id, vD_global_id], is_artificial_node=True, label="GlobalRestrictionNode")
+            self._graph_processor.ts_nodes.extend([vS_global_node, vD_global_node])
+            self._graph_processor.map_nodes.update({vS_global_id: vS_global_node, vD_global_id: vD_global_node})
 
             for edge_orig in omega_for_this_restriction:
                 u, v, l_orig, cap_orig, cost_orig = edge_orig
@@ -374,9 +372,9 @@ class RestrictionForTimeFrameController(RestrictionController):
                 
                 # Thêm và theo dõi các nút ảo trung gian
                 self._all_additional_nodes.update([v_i1_id, v_i2_id])
-                self.graph_processor.check_and_add_nodes([v_i1_id, v_i2_id], is_artificial_node=True, label="IntermediateRestrictionNode")
-                self.graph_processor.ts_nodes.extend([v_i1_node, v_i2_node])
-                self.graph_processor.map_nodes.update({v_i1_id: v_i1_node, v_i2_id: v_i2_node})
+                self._graph_processor.check_and_add_nodes([v_i1_id, v_i2_id], is_artificial_node=True, label="IntermediateRestrictionNode")
+                self._graph_processor.ts_nodes.extend([v_i1_node, v_i2_node])
+                self._graph_processor.map_nodes.update({v_i1_id: v_i1_node, v_i2_id: v_i2_node})
 
                 # Tạo và theo dõi các cung mới
                 new_edges_for_this_arc = [
@@ -395,9 +393,9 @@ class RestrictionForTimeFrameController(RestrictionController):
         # Sau khi xử lý tất cả, cập nhật đồ thị một lần duy nhất
         if self._all_additional_edges:
             edges_to_remove_tuples = { (e[0], e[1]) for e in self._omega }
-            self.graph_processor.ts_edges = [e for e in self.graph_processor.ts_edges if (e[0], e[1]) not in edges_to_remove_tuples]
-            self.graph_processor.ts_edges.extend(self.get_all_additional_edges())
-            self.graph_processor.create_set_of_edges(self.get_all_additional_edges())
+            self._graph_processor.ts_edges = [e for e in self._graph_processor.ts_edges if (e[0], e[1]) not in edges_to_remove_tuples]
+            self._graph_processor.ts_edges.extend(self.get_all_additional_edges())
+            self._graph_processor.create_set_of_edges(self.get_all_additional_edges())
 
         print("Đã áp dụng tất cả restrictions theo thuật toán mới thành công.")
         

@@ -247,17 +247,7 @@ class GraphProcessor:
     def time_window_controller(self, value):
         self._time_window_controller = value
 
-    
-    # Getter và Setter cho restriction_for_timeframe_controller
-    @property
-    def restriction_for_timeframe_controller(self):
-        return self._restriction_for_timeframe_controller
-    
-    @restriction_for_timeframe_controller.setter
-    def restriction_for_timeframe_controller(self, value):
-        self._restriction_for_timeframe_controller = value
-
-    # Getter và Setter cho restriction_controller
+        # Getter và Setter cho restriction_controller
     @property
     def restriction_controller(self):
         return self._restriction_controller
@@ -654,7 +644,7 @@ class GraphProcessor:
     
     def update_graph(self, id1=-1, id2=-1, end_id=-1, agv_id=None):
         """Cập nhật đồ thị với thông tin cạnh mới."""
-        self.restriction_for_timeframe_controller.remove_artificial_artifact()
+        self.restriction_controller.remove_artificial_artifact()
         ID1, ID2, endid = self.get_ids(id1, id2, end_id)
         M = self.graph.number_of_nodes_in_space_graph
         current_time, new_node_id = self.calculate_times(ID1, ID2, endid, M)
@@ -669,7 +659,7 @@ class GraphProcessor:
             self.graph.version += 1
 
         new_halting_edges = self.collect_new_halting_edges()
-        self.restriction_for_timeframe_controller.apply_restriction()
+        self.restriction_controller.apply_restriction()
         self.graph.write_to_file([agv_id, new_node_id], new_halting_edges)                
     
     def process_adjacency_list(self, current_time, new_node_id, M):
