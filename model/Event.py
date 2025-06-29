@@ -138,6 +138,7 @@ class Event:
     def run_network_simplex(self, filename):
         """ Execute the network-simplex algorithm using an external command. """
         if not self.pns_path:
+            pdb.set_trace()
             self.pns_path = input("Enter the path for pns-seq: ")
         command = f"{self.pns_path}/pns-seq -f {filename} > seq-f.txt"
         print("Running network-simplex:", command)

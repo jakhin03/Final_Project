@@ -1882,7 +1882,7 @@ class GraphProcessor:
         
         num_of_agvs = 0
         if(use_config_data):
-            #pdb.set_trace()
+            # pdb.set_trace
             self.num_max_agvs = config.num_max_agvs
             self.ID = config.ID
             self.earliness = config.earliness
