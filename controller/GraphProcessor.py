@@ -57,6 +57,7 @@ class GraphProcessor:
         self._seed = 0
         self._num_max_agvs = 0
         self._graph = None
+        self.ur = 3  # Default value for restrictions
         if(config.level_of_simulation == 1):
             #random in the list
             #import os

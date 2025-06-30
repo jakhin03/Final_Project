@@ -1,0 +1,69 @@
+{
+  "experiment_name": "gamma_control_demo",
+  "timestamp": "20250630_211411",
+  "results": [
+    {
+      "gamma": 1,
+      "escape_edges_count": 1,
+      "violations_count": 8,
+      "total_violation_flow": 12,
+      "total_penalty_cost": 12,
+      "simulation_time": 2.3,
+      "status": "success"
+    },
+    {
+      "gamma": 10,
+      "escape_edges_count": 1,
+      "violations_count": 5,
+      "total_violation_flow": 7,
+      "total_penalty_cost": 70,
+      "simulation_time": 2.1,
+      "status": "success"
+    },
+    {
+      "gamma": 50,
+      "escape_edges_count": 1,
+      "violations_count": 3,
+      "total_violation_flow": 4,
+      "total_penalty_cost": 200,
+      "simulation_time": 2.5,
+      "status": "success"
+    },
+    {
+      "gamma": 100,
+      "escape_edges_count": 1,
+      "violations_count": 2,
+      "total_violation_flow": 2,
+      "total_penalty_cost": 200,
+      "simulation_time": 2.8,
+      "status": "success"
+    },
+    {
+      "gamma": 200,
+      "escape_edges_count": 1,
+      "violations_count": 1,
+      "total_violation_flow": 1,
+      "total_penalty_cost": 200,
+      "simulation_time": 3.1,
+      "status": "success"
+    },
+    {
+      "gamma": 400,
+      "escape_edges_count": 1,
+      "violations_count": 0,
+      "total_violation_flow": 0,
+      "total_penalty_cost": 0,
+      "simulation_time": 3.4,
+      "status": "success"
+    },
+    {
+      "gamma": 800,
+      "escape_edges_count": 1,
+      "violations_count": 0,
+      "total_violation_flow": 0,
+      "total_penalty_cost": 0,
+      "simulation_time": 3.2,
+      "status": "success"
+    }
+  ]
+}

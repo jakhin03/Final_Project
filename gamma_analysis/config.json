@@ -1,0 +1,134 @@
+{
+  "experiment_config": {
+    "name": "Gamma Control Analysis",
+    "description": "Configurable gamma penalty analysis for path planning violations",
+    "version": "1.0.0"
+  },
+  
+  "gamma_settings": {
+    "gamma_values": [0.0, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0],
+    "default_gamma": 1.0,
+    "min_gamma": 0.0,
+    "max_gamma": 100.0,
+    "gamma_step": 0.1
+  },
+  
+  "simulation_parameters": {
+    "num_runs_per_gamma": 3,
+    "timeout_seconds": 60,
+    "map_file": "simplest.txt",
+    "enable_backup": true,
+    "restore_after_run": true
+  },
+  
+  "agv_configuration": {
+    "num_agvs": 2,
+    "agv_speed": 1.0,
+    "agv_capacity": 1,
+    "start_positions": "auto",
+    "end_positions": "auto"
+  },
+  
+  "restriction_settings": {
+    "enable_restrictions": true,
+    "restriction_types": ["capacity", "time_window", "priority"],
+    "capacity_limits": {
+      "default_edge_capacity": 1,
+      "corridor_capacity": 2,
+      "intersection_capacity": 1
+    },
+    "time_windows": {
+      "enable": true,
+      "window_size": 5,
+      "overlap_allowed": false
+    }
+  },
+  
+  "escape_edge_detection": {
+    "enable": true,
+    "artificial_node_threshold": 80,
+    "min_gamma_cost": 0.01,
+    "detection_method": "cost_based",
+    "validate_flow": true
+  },
+  
+  "violation_analysis": {
+    "count_method": "flow_based",
+    "min_violation_threshold": 0.1,
+    "aggregate_by_restriction": true,
+    "include_penalty_cost": true,
+    "detailed_reporting": true
+  },
+  
+  "output_settings": {
+    "output_directory": "output",
+    "create_timestamp_dirs": true,
+    "save_raw_data": true,
+    "save_charts": true,
+    "save_reports": true,
+    "chart_formats": ["png", "pdf"],
+    "data_formats": ["csv", "json"]
+  },
+  
+  "visualization_config": {
+    "chart_style": "seaborn-v0_8",
+    "figure_size": [12, 8],
+    "dpi": 300,
+    "color_scheme": {
+      "violations": "crimson",
+      "costs": "steelblue", 
+      "efficiency": "purple",
+      "success": "green"
+    },
+    "show_annotations": true,
+    "show_trend_lines": true,
+    "show_error_bars": true
+  },
+  
+  "analysis_options": {
+    "statistical_analysis": true,
+    "correlation_analysis": true,
+    "trend_fitting": true,
+    "optimal_gamma_detection": true,
+    "efficiency_metrics": true,
+    "comparative_analysis": true
+  },
+  
+  "advanced_settings": {
+    "debug_mode": false,
+    "verbose_logging": true,
+    "parallel_execution": false,
+    "cache_results": true,
+    "validate_inputs": true,
+    "error_handling": "continue"
+  },
+  
+  "custom_scenarios": {
+    "scenario_1": {
+      "name": "Low Traffic",
+      "num_agvs": 1,
+      "gamma_values": [0.0, 0.5, 1.0, 2.0],
+      "map_file": "simplest.txt"
+    },
+    "scenario_2": {
+      "name": "Medium Traffic", 
+      "num_agvs": 2,
+      "gamma_values": [0.0, 1.0, 5.0, 10.0],
+      "map_file": "simplest.txt"
+    },
+    "scenario_3": {
+      "name": "High Traffic",
+      "num_agvs": 5,
+      "gamma_values": [1.0, 10.0, 50.0, 100.0],
+      "map_file": "map.txt"
+    }
+  },
+  
+  "thresholds": {
+    "violation_significance": 0.1,
+    "cost_significance": 10.0,
+    "correlation_threshold": 0.7,
+    "convergence_tolerance": 0.01,
+    "max_iterations": 100
+  }
+}

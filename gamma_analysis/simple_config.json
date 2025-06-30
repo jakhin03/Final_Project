@@ -1,0 +1,38 @@
+{
+  "experiment_config": {
+    "name": "Simple Gamma Test",
+    "description": "Basic configuration for testing gamma effects with 2 AGVs"
+  },
+  
+  "gamma_settings": {
+    "gamma_values": [0.0, 1.0, 5.0, 10.0],
+    "default_gamma": 1.0
+  },
+  
+  "simulation_parameters": {
+    "num_runs_per_gamma": 2,
+    "timeout_seconds": 30,
+    "map_file": "simplest.txt"
+  },
+  
+  "agv_configuration": {
+    "num_agvs": 2
+  },
+  
+  "output_settings": {
+    "output_directory": "output",
+    "save_charts": true,
+    "save_reports": true,
+    "chart_formats": ["png"]
+  },
+  
+  "violation_analysis": {
+    "min_violation_threshold": 0.1,
+    "detailed_reporting": true
+  },
+  
+  "advanced_settings": {
+    "debug_mode": false,
+    "verbose_logging": true
+  }
+}

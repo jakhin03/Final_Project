@@ -6,6 +6,7 @@ import numpy as np
 import networkx as nx
 import config
 from controller.RestrictionController import RestrictionController
+from gamma_analysis.integrated_gamma_control import GammaControlIntegrator
 
 class RestrictionForTimeFrameController(RestrictionController):
     def __init__(self, graph_processor):
@@ -18,6 +19,11 @@ class RestrictionForTimeFrameController(RestrictionController):
         # --- MERGED FROM max_flow ---
         self._all_additional_edges: List[Tuple[int, int, int, int, int]] = []
         self._all_additional_nodes: Set[int] = set()
+        
+        # --- GAMMA CONTROL INTEGRATION ---
+        self.gamma_integrator = None
+        self.last_escape_edges = []
+        self.last_violations = []
 
     # --- MERGED FROM max_flow ---
     def get_all_additional_nodes(self) -> Set[int]:
@@ -323,7 +329,7 @@ class RestrictionForTimeFrameController(RestrictionController):
 
         max_node_id_val = self._graph_processor.get_max_id()
 
-        for restriction_item in self.restrictions:
+        for idx, restriction_item in enumerate(self.restrictions):
             restriction_edges_config, start_time_frame, end_time_frame, U, priority, gamma_config, k_val = self.restriction_parser(restriction_item)
             
             omega_for_this_restriction = self.identify_restricted_edges(restriction_edges_config, start_time_frame, end_time_frame)
@@ -353,7 +359,8 @@ class RestrictionForTimeFrameController(RestrictionController):
             max_node_id_val += 1
             vD_global_id = max_node_id_val
             vD_global_node = self.RestrictionArtificialNode(vD_global_id, label=f"Global_vD_Res{self.restrictions.index(restriction_item)}")
-            
+            print(f"Artificial source and artificial sink nodes created for restriction {idx}:", vS_global_node, vD_global_node)
+            print(f"Escape gate for restriction {idx} is edge ({vS_global_id}, {vD_global_id}) with gamma={final_gamma} and virtual flow needed={virtual_flow_needed}")
             # Thêm và theo dõi các nút ảo toàn cục
             self._all_additional_nodes.update([vS_global_id, vD_global_id])
             self._graph_processor.check_and_add_nodes([vS_global_id, vD_global_id], is_artificial_node=True, label="GlobalRestrictionNode")
@@ -401,3 +408,117 @@ class RestrictionForTimeFrameController(RestrictionController):
         
     def generate_restriction_edges(self, start_node, end_node, nodes, adj_edges):
         pass
+
+    def update_gamma_dynamically(self, current_time: int):
+        if self.gamma_integrator is None:
+            self.gamma_integrator = GammaControlIntegrator()
+
+        # Collect current escape edges and violations for gamma adjustment
+        current_escape_edges = []
+        current_violations = []
+
+        for restriction_item in self.restrictions:
+            restriction_edges_config, start_time_frame, end_time_frame, U, priority, gamma_config, k_val = self.restriction_parser(restriction_item)
+            
+            omega_for_this_restriction = self.identify_restricted_edges(restriction_edges_config, start_time_frame, end_time_frame)
+            if not omega_for_this_restriction:
+                continue
+            
+            # Calculate current flow and virtual flow needed
+            incoming_capacity = self.calculate_incoming_capacity_for_restricted_nodes(self._graph_processor.ts_edges, omega_for_this_restriction)
+            outgoing_capacity = self.calculate_outgoing_capacity_for_restricted_nodes(self._graph_processor.ts_edges, omega_for_this_restriction)
+            flow_F_through_omega = self.calculate_max_flow(omega_for_this_restriction, incoming_capacity, outgoing_capacity)
+            virtual_flow_needed = self.calculate_virtual_flow(flow_F_through_omega, U)
+
+            # Determine if there are violations
+            violation_occurred = virtual_flow_needed > 0
+
+            # Update gamma using the integrator
+            for edge in omega_for_this_restriction:
+                u, v, l_orig, cap_orig, cost_orig = edge
+                if violation_occurred:
+                    print(f"  Gamma integrator tracking escape edge creation")
+
+        # Apply the updated escape edges to the graph
+        if current_escape_edges:
+            for edge in current_escape_edges:
+                u, v, l, cap, cost = edge
+                self._all_additional_edges.append((u, v, l, cap, cost))
+
+        # Log the current violations and escape edges for debugging
+        print(f"Current Violations at time {current_time}:", current_violations)
+        print(f"Current Escape Edges at time {current_time}:", current_escape_edges)
+    
+    def enable_gamma_control(self):
+        """Enable gamma control integration."""
+        if self.gamma_integrator is None:
+            self.gamma_integrator = GammaControlIntegrator(self)
+            print("✅ Gamma control integration enabled")
+        return self.gamma_integrator
+    
+    def analyze_current_violations(self, tsg_file="TSG.txt"):
+        """
+        Analyze violations in the current TSG file using escape edge flow analysis.
+        This should be called after apply_restriction() and TSG generation.
+        """
+        if self.gamma_integrator is None:
+            self.enable_gamma_control()
+        
+        print(f"\n🔍 ANALYZING VIOLATIONS IN CURRENT TSG...")
+        
+        # Detect escape edges in current TSG
+        escape_edges = self.gamma_integrator.detect_escape_edges(tsg_file)
+        self.last_escape_edges = escape_edges
+        
+        if not escape_edges:
+            print("❌ No escape edges found. Restrictions may not be applied correctly.")
+            return []
+        
+        print(f"Found {len(escape_edges)} escape edges in TSG")
+        
+        # Analyze flow through escape edges
+        violations = self.gamma_integrator.analyze_escape_edge_flow(escape_edges, tsg_file)
+        self.last_violations = violations
+        
+        return violations
+    
+    def test_gamma_impact(self, gamma_values: List[float], simulation_runner):
+        """
+        Test the impact of different gamma values on violations.
+        
+        Args:
+            gamma_values: List of gamma values to test
+            simulation_runner: Function that runs the full simulation pipeline
+        """
+        if self.gamma_integrator is None:
+            self.enable_gamma_control()
+        
+        print(f"🧪 TESTING GAMMA IMPACT ON VIOLATIONS")
+        return self.gamma_integrator.test_gamma_values(gamma_values, simulation_runner)
+    
+    def get_violation_summary(self):
+        """Get summary of last analyzed violations."""
+        return {
+            'escape_edges_count': len(self.last_escape_edges),
+            'violations_count': len(self.last_violations),
+            'total_violation_flow': sum(v['flow'] for v in self.last_violations),
+            'total_penalty_cost': sum(v['penalty_cost'] for v in self.last_violations),
+            'violated_edges': [(v['source'], v['dest']) for v in self.last_violations]
+        }
+    
+    # --- OMEGA ACCESS METHODS ---
+    def get_omega(self) -> List[List[Tuple[int, int, int, int, int]]]:
+        """
+        Get the omega data structure containing restricted edges.
+        Returns a list of weakly connected subgraphs from the omega edges.
+        """
+        if not self._omega:
+            return []
+        
+        # Extract weakly connected subgraphs from omega
+        subgraphs = self.extract_weakly_connected_subgraph(self._omega)
+        return subgraphs
+    
+    def set_omega(self, omega: List[Tuple[int, int, int, int, int]]) -> None:
+        """Set the omega data structure"""
+        self._omega = omega

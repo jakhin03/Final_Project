@@ -36,7 +36,26 @@ class NetworkXSolution:
                                 return n 
         except FileNotFoundError:
             pass
-        return False  
+        return False
+    
+    def is_escape_edge(self, edge):
+        """Check if an edge is an escape edge (vS_global to vD_global) based on node labels."""
+        try:
+            node1, node2 = edge
+            node1_label = self.G.nodes[node1].get('label', '')
+            node2_label = self.G.nodes[node2].get('label', '')
+            return ('Global_vS_Res' in node1_label and 'Global_vD_Res' in node2_label)
+        except:
+            return False
+    
+    def count_violation_flow(self):
+        """Count the total flow through escape edges as violations."""
+        total_violations = 0
+        for source_node, flow_dict in self.flowDict.items():
+            for dest_node, flow_value in flow_dict.items():
+                if flow_value > 0 and self.is_escape_edge((source_node, dest_node)):
+                    total_violations += flow_value
+        return total_violations  
     
     def plot_graph_3d_interactive(self, G):
         if(config.draw == 0):
@@ -167,7 +186,7 @@ class NetworkXSolution:
         import time
         start_time = time.time()
         # Restriction 2 5 4 1 1 2
-        # pdb.set_trace()
+        pdb.set_trace()
         self.flowCost, self.flowDict = nx.network_simplex(G)
         end_time = time.time()
         config.timeSolving += (end_time - start_time)
