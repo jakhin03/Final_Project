@@ -186,6 +186,7 @@ class NetworkXSolution:
         import time
         start_time = time.time()
         # Restriction 2 5 4 1 1 2
+        print("[NXSolution:line189:DEBUG]")
         pdb.set_trace()
         self.flowCost, self.flowDict = nx.network_simplex(G)
         end_time = time.time()
