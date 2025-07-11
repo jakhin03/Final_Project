@@ -23,22 +23,28 @@ class Node:
             pdb.set_trace()
         from controller.NodeGenerator import RestrictionNode
         from controller.NodeGenerator import TimeWindowNode
+        from controller.NodeGenerator import ArtificialNode
         from model.Edge import HoldingEdge
         from controller.EdgeGenerator import RestrictionEdge
         from controller.EdgeGenerator import TimeWindowEdge 
         from model.Edge import MovingEdge
+        from model.Edge import ArtificialEdge
         if(isinstance(node, int)):
             pdb.set_trace()
         if node.id % M == self.id % M and \
         ((node.id - self.id) // M == d) and \
         isinstance(node, Node) and \
         not isinstance(node, RestrictionNode) and \
-        not isinstance(node, TimeWindowNode):
+        not isinstance(node, TimeWindowNode) and \
+        not isinstance(node, ArtificialNode):
             return HoldingEdge(self, node, e[2], e[3], d, d)
         elif isinstance(node, RestrictionNode):
             return RestrictionEdge(self, node, e, "Restriction")
         elif isinstance(node, TimeWindowNode):
             return TimeWindowEdge(self, node, e[4], "TimeWindows")
+        elif isinstance(node, ArtificialNode):
+            # Handle artificial nodes by creating an artificial edge
+            return ArtificialEdge(self, node, e[2], e[3], e[4])
         elif isinstance(node, Node):
             if node.id % M != self.id % M:
                 return MovingEdge(self, node, e[2], e[3], e[4])

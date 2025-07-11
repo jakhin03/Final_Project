@@ -1,3 +1,0 @@
-# Archived
-
-Archived experiment data

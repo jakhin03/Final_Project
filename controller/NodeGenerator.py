@@ -8,6 +8,24 @@ class ArtificialNode(Node):
     def __repr__(self):
         return f"ArtificialNode(id={self.id}, label='{self.label}', temporary={self.temporary})"
     
+    def create_edge(self, node, M, d, e, debug=False):
+        """Create edge from artificial node to any other node type."""
+        if debug:
+            import pdb
+            pdb.set_trace()
+        from controller.NodeGenerator import RestrictionNode
+        from controller.NodeGenerator import TimeWindowNode
+        from controller.EdgeGenerator import RestrictionEdge
+        from controller.EdgeGenerator import TimeWindowEdge
+        from model.Edge import ArtificialEdge
+        
+        if isinstance(node, int):
+            import pdb
+            pdb.set_trace()
+        
+        # For artificial nodes, we always create ArtificialEdge regardless of destination
+        return ArtificialEdge(self, node, e[2], e[3], e[4])
+    
 from controller.EdgeGenerator import RestrictionEdge
 import pdb
 

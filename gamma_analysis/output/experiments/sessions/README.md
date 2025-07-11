@@ -1,3 +1,0 @@
-# Sessions
-
-Individual session results

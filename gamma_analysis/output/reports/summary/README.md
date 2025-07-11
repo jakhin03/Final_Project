@@ -1,3 +1,0 @@
-# Summary
-
-Executive summary reports

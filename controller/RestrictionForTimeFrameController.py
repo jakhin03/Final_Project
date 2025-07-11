@@ -24,6 +24,11 @@ class RestrictionForTimeFrameController(RestrictionController):
         self.gamma_integrator = None
         self.last_escape_edges = []
         self.last_violations = []
+        
+        # --- VIRTUAL FLOW MAPPING ---
+        # Map virtual node IDs to their virtual flow values
+        # Format: {vS_global_id: virtual_flow_needed, vD_global_id: -virtual_flow_needed}
+        self._virtual_node_demands = {}
 
     # --- MERGED FROM max_flow ---
     def get_all_additional_nodes(self) -> Set[int]:
@@ -44,34 +49,55 @@ class RestrictionForTimeFrameController(RestrictionController):
         Khôi phục lại đồ thị về trạng thái trước khi áp dụng ràng buộc
         bằng cách xóa các nút và cung ảo đã được thêm vào.
         """
+        print("[DEBUG] remove_artificial_artifact: Starting cleanup process")
+        
         additional_nodes_ids = self.get_all_additional_nodes()
         additional_edges_tuples = self.get_all_additional_edges()
+        
+        print(f"[DEBUG] Will remove {len(additional_nodes_ids)} additional nodes: {sorted(additional_nodes_ids)}")
+        print(f"[DEBUG] Will remove {len(additional_edges_tuples)} additional edges")
 
         # Xóa các nút ảo
         if additional_nodes_ids:
+            original_node_count = len(self._graph_processor.ts_nodes)
             self._graph_processor.ts_nodes = [
                 node for node in self._graph_processor.ts_nodes
                 if node.id not in additional_nodes_ids
             ]
+            removed_nodes = original_node_count - len(self._graph_processor.ts_nodes)
+            print(f"[DEBUG] Removed {removed_nodes} nodes from ts_nodes")
+            
+            removed_map_nodes = 0
             for node_id in additional_nodes_ids:
-                self._graph_processor.map_nodes.pop(node_id, None)
+                if node_id in self._graph_processor.map_nodes:
+                    self._graph_processor.map_nodes.pop(node_id, None)
+                    removed_map_nodes += 1
+            print(f"[DEBUG] Removed {removed_map_nodes} nodes from map_nodes")
 
         # Xóa các cung ảo
         if additional_edges_tuples:
             # Tạo một set từ tuple của các cung ảo để tìm kiếm nhanh hơn
             additional_edges_set = { (e[0], e[1]) for e in additional_edges_tuples }
+            print(f"[DEBUG] Additional edges set: {additional_edges_set}")
             
             # Xóa từ self._graph_processor.ts_edges (list of tuples)
+            original_edge_count = len(self._graph_processor.ts_edges)
             self._graph_processor.ts_edges = [
                 edge for edge in self._graph_processor.ts_edges
                 if (edge[0], edge[1]) not in additional_edges_set
             ]
+            removed_edges = original_edge_count - len(self._graph_processor.ts_edges)
+            print(f"[DEBUG] Removed {removed_edges} edges from ts_edges")
+            
             # Xóa từ self._graph_processor.tsedges (list of Edge objects)
             if hasattr(self._graph_processor, 'tsedges'):
-                 self._graph_processor.tsedges = [
+                original_tsedges_count = len(self._graph_processor.tsedges)
+                self._graph_processor.tsedges = [
                     edge_obj for edge_obj in self._graph_processor.tsedges
                     if hasattr(edge_obj, 'start_node') and (edge_obj.start_node.id, edge_obj.end_node.id) not in additional_edges_set
                 ]
+                removed_tsedges = original_tsedges_count - len(self._graph_processor.tsedges)
+                print(f"[DEBUG] Removed {removed_tsedges} edges from tsedges")
 
         # Khôi phục các cung gốc đã bị xóa
         original_edges_to_re_add = {
@@ -79,6 +105,7 @@ class RestrictionForTimeFrameController(RestrictionController):
             if any((e[0], e[1]) in additional_edges_set for e in self.get_all_additional_edges()) # Heuristic to find which omega was processed
         }
         if original_edges_to_re_add:
+            print(f"[DEBUG] Re-adding {len(original_edges_to_re_add)} original omega edges")
             self._graph_processor.ts_edges.extend(list(original_edges_to_re_add))
             self._graph_processor.create_set_of_edges(original_edges_to_re_add)
 
@@ -86,7 +113,10 @@ class RestrictionForTimeFrameController(RestrictionController):
         self.set_all_additional_nodes(set())
         self.set_all_additional_edges([])
         self._omega = []
-        print("Đã dọn dẹp và khôi phục lại các thực thể ảo.")
+        self._virtual_node_demands = {}  # Clear virtual node demands
+        
+        print(f"[DEBUG] Cleanup completed - omega cleared, virtual demands cleared")
+        print("[CLEANUP] Successfully removed all artificial nodes and edges")
 
 
     
@@ -99,23 +129,26 @@ class RestrictionForTimeFrameController(RestrictionController):
 
     def validate_restriction(self, restriction_edges: List[List[int]], timeframe: List[int], U: int) -> bool:
         if not restriction_edges or not timeframe or U < 0:
-            print("Restriction không hợp lệ")
+            print("[ERROR] Validation failed: Missing basic information")
             return False
         if len(timeframe) != 2 or timeframe[0] > timeframe[1]:
-            print("Time frame không hợp lệ")
+            print("[ERROR] Validation failed: Invalid timeframe format (must have 2 values, start <= end)")
             return False
         if not all(len(edge) == 2 for edge in restriction_edges):
-            print("Restriction edges format không hợp lệ")
+            print("[ERROR] Validation failed: Invalid edge format (each edge must have 2 nodes)")
             return False
         return True
 
     def calculate_default_gamma(self, TSG, priority=1.0, k=1, min_gamma=200):
         if not TSG:
+            print(f"[DEBUG] calculate_default_gamma: TSG is empty, returning min_gamma={min_gamma}")
             return min_gamma
         costs = [cost for (_, _, _, _, cost) in TSG if cost is not None]
         avg_cost = np.mean(costs) if costs else 10
         gamma = k * avg_cost * max(1.0, priority)
-        return max(gamma, min_gamma)
+        final_gamma = max(gamma, min_gamma)
+        print(f"[DEBUG] calculate_default_gamma: costs_count={len(costs)}, avg_cost={avg_cost}, k={k}, priority={priority}, calculated_gamma={gamma}, final_gamma={final_gamma}")
+        return final_gamma
 
     def _save_restrictions_to_config(self):
         if hasattr(config, 'restrictions_data_cache'):
@@ -130,71 +163,93 @@ class RestrictionForTimeFrameController(RestrictionController):
                 return bool(self.restrictions)
             config.restrictions_are_set_in_cache = False
 
+        print("[Restriction Config] Setting up traffic restrictions...")
+
         self.restrictions = []
         try:
-            L_str = input("Nhập số restrictions (để trống nếu không có): ")
+            L_str = input("\nEnter number of restrictions (leave empty for none): ")
             if not L_str.strip():
+                print("[Restriction Config] No restrictions specified")
                 self._save_restrictions_to_config()
                 return False
 
             L = int(L_str)
             if L == 0:
+                print("[Restriction Config] Zero restrictions specified")
                 self._save_restrictions_to_config()
                 return False
 
+            print(f"[Restriction Config] Setting up {L} restrictions")
+            # ...existing code...
+
             for i in range(L):
-                print(f"--- Nhập thông tin cho restriction {i+1}/{L} ---")
-                timeframe_str = input(f"    Nhập timeframe cho restriction thứ {i+1} (vd: 3 4): ")
-                if not timeframe_str.strip(): print("Timeframe không được để trống. Bỏ qua restriction này."); continue
+                print(f"[Restriction Config] Input {i+1}/{L}")
+                
+                timeframe_str = input(f"    Timeframe (e.g., '3 4'): ")
+                if not timeframe_str.strip(): 
+                    print("[Restriction Config] WARNING: Timeframe cannot be empty. Skipping")
+                    continue
                 timeframe = list(map(int, timeframe_str.split()))
 
-                restriction_nodes_str = input(f"    Nhập các edges cho timeframe {timeframe} (vd 3 4 5 6 là 2 edge [3,4] và [5,6]): ")
-                if not restriction_nodes_str.strip(): print("Các edges không được để trống. Bỏ qua restriction này."); continue
+                restriction_nodes_str = input(f"    Restricted edges for timeframe {timeframe} (e.g., '3 4 5 6' for edges [3,4] and [5,6]): ")
+                if not restriction_nodes_str.strip(): 
+                    print("[Restriction Config] WARNING: Edges cannot be empty. Skipping")
+                    continue
                 restriction_nodes = list(map(int, restriction_nodes_str.split()))
                 
-                U_str = input(f"    Nhập số lượng AGV tối đa (U) cho restriction {i+1}: ")
-                if not U_str.strip(): print("U không được để trống. Bỏ qua restriction này."); continue
+                U_str = input(f"    Maximum AGVs allowed (U): ")
+                if not U_str.strip(): 
+                    print("[Restriction Config] WARNING: Maximum AGVs (U) cannot be empty. Skipping")
+                    continue
                 U = int(U_str)
 
                 if len(restriction_nodes) % 2 != 0 or len(restriction_nodes) < 2:
-                    print("Restriction edge không hợp lệ (phải là cặp số). Bỏ qua restriction này.")
+                    print("[Restriction Config] ERROR: Invalid edge format. Skipping")
                     continue
 
                 restriction_edges = [[restriction_nodes[j], restriction_nodes[j+1]] for j in range(0, len(restriction_nodes), 2)]
 
-                priority_input = input(f"    Nhập priority (>=0, mặc định 1) cho restriction {i+1}: ")
+                priority_input = input(f"    Priority (>=0, default=1): ")
                 priority = 1.0
                 if priority_input.strip():
                     try:
                         priority_val = float(priority_input)
-                        if priority_val < 0: print("Priority không hợp lệ, dùng mặc định 1.0")
+                        if priority_val < 0: 
+                            print("[Restriction Config] WARNING: Invalid priority, using default 1.0")
                         else: priority = priority_val
-                    except ValueError: print("Priority không hợp lệ, dùng mặc định 1.0")
+                    except ValueError: 
+                        print("[Restriction Config] WARNING: Invalid priority format, using default 1.0")
                 
-                gamma_input = input(f"    Nhập gamma (phí phạt, để trống thì tự động tính): ")
+                gamma_input = input(f"    Penalty cost gamma (leave empty for auto-calculation): ")
                 gamma = None # Will be auto-calculated if None
                 if gamma_input.strip():
                     try:
                         gamma_val = float(gamma_input)
-                        if gamma_val < 1: print("Gamma quá nhỏ, dùng min_gamma = 1 (hoặc tự động tính)"); gamma = 1.0 # Or keep None for auto
+                        if gamma_val < 1: 
+                            print("[Restriction Config] WARNING: Gamma too small, using minimum 1.0")
+                            gamma = 1.0
                         else: gamma = gamma_val
-                    except ValueError: print("Gamma không hợp lệ, sẽ tự động tính.")
+                    except ValueError: 
+                        print("[Restriction Config] WARNING: Invalid gamma format, will auto-calculate")
                 
-                k_input = input(f"    Nhập hệ số k (mặc định 2, k càng lớn thì cost vi phạm càng cao) cho gamma: ")
+                k_input = input(f"    K-factor for gamma calculation (default=2, higher K = higher violation cost): ")
                 k_val = 2.0
                 if k_input.strip():
                     try: k_val = float(k_input)
-                    except ValueError: print("Hệ số k không hợp lệ, dùng mặc định 2.0")
+                    except ValueError: 
+                        print("[Restriction Config] WARNING: Invalid K-factor format, using default 2.0")
 
                 if self.validate_restriction(restriction_edges, timeframe, U):
                     self.restrictions.append((restriction_edges, timeframe, U, priority, gamma, k_val))
+                    print(f"[Restriction Config] Restriction {i+1} added successfully")
                 else:
                     # validate_restriction prints its own messages
-                    print(f"Restriction {i+1} không hợp lệ, đã bỏ qua.")
+                    print(f"[Restriction Config] Restriction {i+1} validation failed, skipped")
             self._save_restrictions_to_config()
+            print(f"[Restriction Config] Setup completed: {len(self.restrictions)} restrictions added")
             return bool(self.restrictions)
         except (ValueError, Exception) as e:
-            print(f"Lỗi nhập liệu hoặc lỗi không mong muốn: {e}")
+            print(f"[FATAL ERROR] Input error: {e}")
             if hasattr(config, 'restrictions_are_set_in_cache'): config.restrictions_are_set_in_cache = False
             self.restrictions = []
             return False
@@ -223,7 +278,9 @@ class RestrictionForTimeFrameController(RestrictionController):
 
     def calculate_virtual_flow(self, max_flow: int, U: int) -> int:
         # Calculate needed virtual flow
-        return max(0, max_flow - U)
+        virtual_flow = max(0, max_flow - U)
+        print(f"[DEBUG] calculate_virtual_flow: max_flow={max_flow}, U={U}, virtual_flow={virtual_flow}")
+        return virtual_flow
 
     def extract_weakly_connected_subgraph(self, graph: List[Tuple[int, int, int, int, int]]) -> List[List[Tuple[int, int, int, int, int]]]:
         # Get weakly connected subgraphs
@@ -256,9 +313,17 @@ class RestrictionForTimeFrameController(RestrictionController):
         return list(components.values())
 
     def identify_restricted_edges(self, restriction_edges, start_time_frame, end_time_frame):
+        print(f"[DEBUG] identify_restricted_edges: restriction_edges={restriction_edges}, timeframe=[{start_time_frame}, {end_time_frame}]")
+        
         omega = []
         restriction_set = {(u, v) for u, v in restriction_edges}
+        print(f"[DEBUG] restriction_set: {restriction_set}")
+        
+        total_edges_checked = 0
+        matching_edges = 0
+        
         for edge_tuple in self._graph_processor.ts_edges:
+            total_edges_checked += 1
             source_id, dest_id, _, capacity, cost = edge_tuple
             t1 = self._get_node_time(source_id)
             t2 = self._get_node_time(dest_id)
@@ -267,59 +332,117 @@ class RestrictionForTimeFrameController(RestrictionController):
             base_edge = (s_source, s_dest)
 
             if base_edge in restriction_set:
+                matching_edges += 1
                 time_intersects = (t1 < end_time_frame) and (t2 > start_time_frame)
+                print(f"[DEBUG] Edge ({source_id}, {dest_id}) -> base_edge={base_edge}, times=({t1}, {t2}), time_intersects={time_intersects}")
+                
                 if time_intersects:
                     omega.append((source_id, dest_id, 0, capacity, cost))
+                    print(f"[DEBUG] Added to omega: ({source_id}, {dest_id}, 0, {capacity}, {cost})")
+        
+        print(f"[DEBUG] identify_restricted_edges result: checked {total_edges_checked} edges, found {matching_edges} matching edges, omega size: {len(omega)}")
         return omega
     
     def identify_restricted_nodes(self, omega: List[Tuple[int, int, int, int, int]]) -> set:
         # Identify restricted nodes in omega
+        print(f"[DEBUG] identify_restricted_nodes: omega size = {len(omega)}")
+        
         restricted_nodes = set()
         for source_id, dest_id, _, _, _ in omega:
             restricted_nodes.add(source_id)
             restricted_nodes.add(dest_id)
+            print(f"[DEBUG] Processing edge ({source_id}, {dest_id})")
+        
+        print(f"[DEBUG] identify_restricted_nodes result: {len(restricted_nodes)} nodes = {sorted(restricted_nodes)}")
         return restricted_nodes
         
     def calculate_incoming_capacity_for_restricted_nodes(self, TSG: List[Tuple[int, int, int, int, int]] , restricted_nodes) -> defaultdict:
         # Identify restricted nodes in omega with edges come from nodes not in omega and their capacities
+        print(f"[DEBUG] calculate_incoming_capacity: restricted_nodes={sorted(restricted_nodes)}, TSG size={len(TSG)}")
+        
         restricted_nodes_incoming_capacity = defaultdict(int)
+        incoming_edges_found = 0
+        
         for source_id, dest_id, _, capacity, _ in TSG:
             if dest_id in restricted_nodes  and source_id not in restricted_nodes:
                 restricted_nodes_incoming_capacity[dest_id] += capacity
+                incoming_edges_found += 1
+                print(f"[DEBUG] Incoming edge: ({source_id}, {dest_id}) capacity={capacity}")
+        
+        print(f"[DEBUG] calculate_incoming_capacity result: found {incoming_edges_found} incoming edges")
+        for node_id, capacity in restricted_nodes_incoming_capacity.items():
+            print(f"[DEBUG] Node {node_id} total incoming capacity: {capacity}")
+        
         return restricted_nodes_incoming_capacity
     
     def calculate_outgoing_capacity_for_restricted_nodes(self, TSG: List[Tuple[int, int, int, int, int]], restricted_nodes) -> defaultdict:
         # Identify restricted nodes in omega with edges go to nodes not in omega and their capacities
+        print(f"[DEBUG] calculate_outgoing_capacity: restricted_nodes={sorted(restricted_nodes)}, TSG size={len(TSG)}")
+        
         restricted_nodes_outgoing_capacity = defaultdict(int)
+        outgoing_edges_found = 0
+        
         for source_id, dest_id, _, capacity, _ in TSG:
             if source_id in restricted_nodes and dest_id not in restricted_nodes:
                 restricted_nodes_outgoing_capacity[source_id] += capacity
+                outgoing_edges_found += 1
+                print(f"[DEBUG] Outgoing edge: ({source_id}, {dest_id}) capacity={capacity}")
                 
+        print(f"[DEBUG] calculate_outgoing_capacity result: found {outgoing_edges_found} outgoing edges")
+        for node_id, capacity in restricted_nodes_outgoing_capacity.items():
+            print(f"[DEBUG] Node {node_id} total outgoing capacity: {capacity}")
+        
         return restricted_nodes_outgoing_capacity
     
     def calculate_max_flow(self , omega: List[Tuple[int, int, int, int, int]] , restricted_nodes_incoming_capacity , restricted_nodes_outgoing_capacity) -> int:
         # Calculate max flow F
+        print(f"[DEBUG] calculate_max_flow: omega size={len(omega)}")
+        print(f"[DEBUG] incoming capacity nodes: {len(restricted_nodes_incoming_capacity)}")
+        print(f"[DEBUG] outgoing capacity nodes: {len(restricted_nodes_outgoing_capacity)}")
         
         # Build graph
         G = nx.DiGraph()
         # Ensure virtual source and sink nodes exist in the graph
         G.add_node("vS")
         G.add_node("vT")
+        print(f"[DEBUG] Added virtual source 'vS' and sink 'vT' nodes")
 
+        # Add omega edges
+        omega_edges_added = 0
         for source_id, dest_id, _, capacity, _ in omega:
             G.add_edge(source_id, dest_id, capacity=capacity)
+            omega_edges_added += 1
+            print(f"[DEBUG] Added omega edge: ({source_id}, {dest_id}) capacity={capacity}")
+        
+        print(f"[DEBUG] Added {omega_edges_added} omega edges to max flow graph")
             
         # Add incoming edges for restricted nodes
+        incoming_edges_added = 0
         for node_id, capacity in restricted_nodes_incoming_capacity.items():
             G.add_edge("vS", node_id , capacity=capacity)
+            incoming_edges_added += 1
+            print(f"[DEBUG] Added incoming edge: (vS, {node_id}) capacity={capacity}")
+        
+        print(f"[DEBUG] Added {incoming_edges_added} incoming edges from vS")
         
         # Add outgoing edges for restricted nodes
+        outgoing_edges_added = 0
         for node_id, capacity in restricted_nodes_outgoing_capacity.items():
             G.add_edge(node_id, "vT", capacity=capacity)
-                        
-        return nx.maximum_flow_value(G, "vS", "vT")
+            outgoing_edges_added += 1
+            print(f"[DEBUG] Added outgoing edge: ({node_id}, vT) capacity={capacity}")
+        
+        print(f"[DEBUG] Added {outgoing_edges_added} outgoing edges to vT")
+        
+        # Calculate max flow
+        max_flow_value = nx.maximum_flow_value(G, "vS", "vT")
+        print(f"[DEBUG] Maximum flow calculated: {max_flow_value}")
+        
+        return max_flow_value
 
     def apply_restriction(self) -> None:
+        print("[Restriction] Applying restrictions...")
+        
         if not self.get_restrictions():
             return
         
@@ -328,28 +451,42 @@ class RestrictionForTimeFrameController(RestrictionController):
             self.remove_artificial_artifact()
 
         max_node_id_val = self._graph_processor.get_max_id()
+        processed_restrictions = 0
 
         for idx, restriction_item in enumerate(self.restrictions):
+            print(f"[DEBUG] Processing restriction {idx + 1}/{len(self.restrictions)}")
+            
             restriction_edges_config, start_time_frame, end_time_frame, U, priority, gamma_config, k_val = self.restriction_parser(restriction_item)
+            print(f"[DEBUG] Restriction {idx + 1}: timeframe=[{start_time_frame}, {end_time_frame}], U={U}, priority={priority}, gamma={gamma_config}, k={k_val}")
+            print(f"[DEBUG] Restriction {idx + 1}: edges_config={restriction_edges_config}")
             
             omega_for_this_restriction = self.identify_restricted_edges(restriction_edges_config, start_time_frame, end_time_frame)
             if not omega_for_this_restriction:
+                print(f"[DEBUG] Restriction {idx + 1}: No omega edges found, skipping")
                 continue
+            
+            print(f"[DEBUG] Restriction {idx + 1}: Found {len(omega_for_this_restriction)} omega edges")
             
             # Lưu lại omega để có thể khôi phục cung gốc khi dọn dẹp
             self._omega.extend(omega_for_this_restriction)
 
             current_restricted_nodes_set = self.identify_restricted_nodes(omega_for_this_restriction)
+            print(f"[DEBUG] Restriction {idx + 1}: Restricted nodes: {sorted(current_restricted_nodes_set)}")
+            
             incoming_capacity = self.calculate_incoming_capacity_for_restricted_nodes(self._graph_processor.ts_edges, current_restricted_nodes_set)
             outgoing_capacity = self.calculate_outgoing_capacity_for_restricted_nodes(self._graph_processor.ts_edges, current_restricted_nodes_set)
             
             flow_F_through_omega = self.calculate_max_flow(omega_for_this_restriction, incoming_capacity, outgoing_capacity)
             virtual_flow_needed = self.calculate_virtual_flow(flow_F_through_omega, U)
+            
+            print(f"[DEBUG] Restriction {idx + 1}: Max flow F={flow_F_through_omega}, U={U}, virtual_flow_needed={virtual_flow_needed}")
 
             if virtual_flow_needed <= 0:
+                print(f"[DEBUG] Restriction {idx + 1}: No virtual flow needed, skipping")
                 continue
 
             final_gamma = int(round(gamma_config if gamma_config is not None else self.calculate_default_gamma(self._graph_processor.ts_edges, priority, k_val, self._min_gamma)))
+            print(f"[DEBUG] Restriction {idx + 1}: Final gamma={final_gamma}")
             
             # Tạo nút ảo toàn cục cho ràng buộc này
             max_node_id_val += 1
@@ -359,17 +496,24 @@ class RestrictionForTimeFrameController(RestrictionController):
             max_node_id_val += 1
             vD_global_id = max_node_id_val
             vD_global_node = self.RestrictionArtificialNode(vD_global_id, label=f"Global_vD_Res{self.restrictions.index(restriction_item)}")
-            print(f"Artificial source and artificial sink nodes created for restriction {idx}:", vS_global_node, vD_global_node)
-            print(f"Escape gate for restriction {idx} is edge ({vS_global_id}, {vD_global_id}) with gamma={final_gamma} and virtual flow needed={virtual_flow_needed}")
+            
+            print(f"[DEBUG] Restriction {idx + 1}: Created global nodes vS={vS_global_id}, vD={vD_global_id}")
+            
+            # Track virtual flow demands for these nodes
+            self._virtual_node_demands[vS_global_id] = virtual_flow_needed
+            self._virtual_node_demands[vD_global_id] = -virtual_flow_needed
+            print(f"[DEBUG] Restriction {idx + 1}: Virtual demands - vS({vS_global_id})={virtual_flow_needed}, vD({vD_global_id})={-virtual_flow_needed}")
+            
             # Thêm và theo dõi các nút ảo toàn cục
             self._all_additional_nodes.update([vS_global_id, vD_global_id])
             self._graph_processor.check_and_add_nodes([vS_global_id, vD_global_id], is_artificial_node=True, label="GlobalRestrictionNode")
             self._graph_processor.ts_nodes.extend([vS_global_node, vD_global_node])
             self._graph_processor.map_nodes.update({vS_global_id: vS_global_node, vD_global_id: vD_global_node})
-
-            for edge_orig in omega_for_this_restriction:
+            print(f"[DEBUG] Restriction {idx + 1}: Added global nodes to graph")
+            
+            for edge_idx, edge_orig in enumerate(omega_for_this_restriction):
                 u, v, l_orig, cap_orig, cost_orig = edge_orig
-                self._all_additional_edges.append(edge_orig) # Theo dõi cung gốc để xóa
+                print(f"[DEBUG] Restriction {idx + 1}: Processing omega edge {edge_idx + 1}: ({u}, {v}, {l_orig}, {cap_orig}, {cost_orig})")
 
                 # Tạo các nút ảo trung gian
                 max_node_id_val += 1; v_i1_id = max_node_id_val
@@ -377,13 +521,15 @@ class RestrictionForTimeFrameController(RestrictionController):
                 v_i1_node = self.RestrictionArtificialNode(v_i1_id, label=f"v_i1_{u}_{v}")
                 v_i2_node = self.RestrictionArtificialNode(v_i2_id, label=f"v_i2_{u}_{v}")
                 
+                print(f"[DEBUG] Restriction {idx + 1}: Created intermediate nodes v_i1={v_i1_id}, v_i2={v_i2_id}")
+                
                 # Thêm và theo dõi các nút ảo trung gian
                 self._all_additional_nodes.update([v_i1_id, v_i2_id])
                 self._graph_processor.check_and_add_nodes([v_i1_id, v_i2_id], is_artificial_node=True, label="IntermediateRestrictionNode")
                 self._graph_processor.ts_nodes.extend([v_i1_node, v_i2_node])
                 self._graph_processor.map_nodes.update({v_i1_id: v_i1_node, v_i2_id: v_i2_node})
 
-                # Tạo và theo dõi các cung mới
+                # Tạo và theo dõi các cung mới (chỉ các cung ảo, KHÔNG bao gồm cung gốc)
                 new_edges_for_this_arc = [
                     (u, v_i1_id, l_orig, cap_orig, cost_orig),
                     (v_i1_id, v_i2_id, l_orig, cap_orig, 0),
@@ -393,18 +539,54 @@ class RestrictionForTimeFrameController(RestrictionController):
                 ]
                 self._all_additional_edges.extend(new_edges_for_this_arc)
                 
+                print(f"[DEBUG] Restriction {idx + 1}: Added {len(new_edges_for_this_arc)} new edges for omega edge {edge_idx + 1}:")
+                for new_edge in new_edges_for_this_arc:
+                    print(f"[DEBUG]   New edge: ({new_edge[0]}, {new_edge[1]}, {new_edge[2]}, {new_edge[3]}, {new_edge[4]})")
+                
             # Tạo và theo dõi cung thoát
             escape_edge = (vS_global_id, vD_global_id, 0, virtual_flow_needed, final_gamma)
+            print(f"[DEBUG] Restriction {idx + 1}: Creating escape edge: ({vS_global_id}, {vD_global_id}, 0, {virtual_flow_needed}, {final_gamma})")
+            print(f"[Restriction] Adding escape edge: ({vS_global_id}, {vD_global_id}, 0, {virtual_flow_needed}, {final_gamma})")
             self._all_additional_edges.append(escape_edge)
             
+            processed_restrictions += 1
+            print(f"[DEBUG] Restriction {idx + 1}: Processing completed")
+            
+        print(f"[DEBUG] Total restrictions processed: {processed_restrictions}")
+        print(f"[DEBUG] Total additional nodes created: {len(self._all_additional_nodes)}")
+        print(f"[DEBUG] Total additional edges created: {len(self._all_additional_edges)}")
+        print(f"[DEBUG] Additional nodes: {sorted(self._all_additional_nodes)}")
+        print(f"[DEBUG] Virtual node demands: {self._virtual_node_demands}")
+        
         # Sau khi xử lý tất cả, cập nhật đồ thị một lần duy nhất
         if self._all_additional_edges:
-            edges_to_remove_tuples = { (e[0], e[1]) for e in self._omega }
-            self._graph_processor.ts_edges = [e for e in self._graph_processor.ts_edges if (e[0], e[1]) not in edges_to_remove_tuples]
+            edges_to_remove_tuples = { (int(e[0]), int(e[1])) for e in self._omega }
+            original_edge_count = len(self._graph_processor.ts_edges)
+            print(f"[DEBUG] Original graph has {original_edge_count} edges")
+            print(f"[DEBUG] Will remove {len(edges_to_remove_tuples)} original edges: {edges_to_remove_tuples}")
+            
+            # Remove from both ts_edges (tuples) and tsedges (Edge objects)
+            self._graph_processor.ts_edges = [e for e in self._graph_processor.ts_edges if (int(e[0]), int(e[1])) not in edges_to_remove_tuples]
+            
+            # Also remove from tsedges (Edge objects)
+            if hasattr(self._graph_processor, 'tsedges'):
+                self._graph_processor.tsedges = [
+                    edge_obj for edge_obj in self._graph_processor.tsedges 
+                    if edge_obj is not None and (int(edge_obj.start_node.id), int(edge_obj.end_node.id)) not in edges_to_remove_tuples
+                ]
+            
+            removed_edges = original_edge_count - len(self._graph_processor.ts_edges)
+            print(f"[DEBUG] Removed {removed_edges} original edges, graph now has {len(self._graph_processor.ts_edges)} edges")
+            
             self._graph_processor.ts_edges.extend(self.get_all_additional_edges())
             self._graph_processor.create_set_of_edges(self.get_all_additional_edges())
+            print(f"[DEBUG] Added {len(self.get_all_additional_edges())} additional edges, graph now has {len(self._graph_processor.ts_edges)} edges:")
+            
+            # Debug: Print some escape edges
+            for additional_edge in self._all_additional_edges:
+                print(f"[DEBUG]   Additional edge: ({additional_edge[0]}, {additional_edge[1]}, {additional_edge[2]}, {additional_edge[3]}, {additional_edge[4]})")
 
-        print("Đã áp dụng tất cả restrictions theo thuật toán mới thành công.")
+        print("[Restriction] Applied successfully")
         
     def generate_restriction_edges(self, start_node, end_node, nodes, adj_edges):
         pass
@@ -437,7 +619,7 @@ class RestrictionForTimeFrameController(RestrictionController):
             for edge in omega_for_this_restriction:
                 u, v, l_orig, cap_orig, cost_orig = edge
                 if violation_occurred:
-                    print(f"  Gamma integrator tracking escape edge creation")
+                    print(f"[Gamma Integrator] Tracking escape edge ({u}, {v})")
 
         # Apply the updated escape edges to the graph
         if current_escape_edges:
@@ -446,16 +628,55 @@ class RestrictionForTimeFrameController(RestrictionController):
                 self._all_additional_edges.append((u, v, l, cap, cost))
 
         # Log the current violations and escape edges for debugging
-        print(f"Current Violations at time {current_time}:", current_violations)
-        print(f"Current Escape Edges at time {current_time}:", current_escape_edges)
+        print(f"[Gamma Update] Time: {current_time}, Violations: {len(current_violations)}, Escape edges: {len(current_escape_edges)}")
+        if current_violations:
+            for i, violation in enumerate(current_violations):
+                print(f"  Violation {i+1}: {violation}")
+        if current_escape_edges:
+            for i, edge in enumerate(current_escape_edges):
+                print(f"  Escape edge {i+1}: {edge}")
     
     def enable_gamma_control(self):
         """Enable gamma control integration."""
         if self.gamma_integrator is None:
             self.gamma_integrator = GammaControlIntegrator(self)
-            print("✅ Gamma control integration enabled")
+            print("[Gamma Control] Integration enabled")
         return self.gamma_integrator
     
+    def set_gamma_value(self, gamma_value: float):
+        """
+        Set the gamma value for penalty cost calculation.
+        
+        Args:
+            gamma_value: The gamma penalty factor to use
+        """
+        self._min_gamma = gamma_value
+        print(f"[Gamma Control] Gamma value set to: {gamma_value}")
+        
+        # Update gamma integrator if it exists
+        if self.gamma_integrator:
+            self.gamma_integrator.set_gamma_value(gamma_value)
+        
+        # Update all existing restrictions to use the new gamma value
+        for i, restriction in enumerate(self.restrictions):
+            # Unpack the restriction tuple
+            time_frames, restricted_edges, U, priority, gamma_config, k_val = restriction
+            
+            # Update the gamma value in the restriction
+            updated_restriction = (time_frames, restricted_edges, U, priority, gamma_value, k_val)
+            self.restrictions[i] = updated_restriction
+            
+        print(f"[Gamma Control] Updated {len(self.restrictions)} restrictions with new gamma value")
+
+    def get_gamma_value(self) -> float:
+        """
+        Get the current gamma value.
+        
+        Returns:
+            Current gamma penalty factor
+        """
+        return self._min_gamma
+
     def analyze_current_violations(self, tsg_file="TSG.txt"):
         """
         Analyze violations in the current TSG file using escape edge flow analysis.
@@ -464,22 +685,28 @@ class RestrictionForTimeFrameController(RestrictionController):
         if self.gamma_integrator is None:
             self.enable_gamma_control()
         
-        print(f"\n🔍 ANALYZING VIOLATIONS IN CURRENT TSG...")
+        print(f"[Violation Analysis] Analyzing {tsg_file}")
         
         # Detect escape edges in current TSG
         escape_edges = self.gamma_integrator.detect_escape_edges(tsg_file)
         self.last_escape_edges = escape_edges
         
         if not escape_edges:
-            print("❌ No escape edges found. Restrictions may not be applied correctly.")
+            print("[Violation Analysis] ERROR: No escape edges found")
             return []
         
-        print(f"Found {len(escape_edges)} escape edges in TSG")
+        print(f"[Violation Analysis] Found {len(escape_edges)} escape edges")
         
         # Analyze flow through escape edges
         violations = self.gamma_integrator.analyze_escape_edge_flow(escape_edges, tsg_file)
         self.last_violations = violations
         
+        if violations:
+            print(f"[Violation Analysis] {len(violations)} violations detected:")
+            for i, violation in enumerate(violations):
+                print(f"  Violation {i+1}: {violation}")
+        else:
+            print("[Violation Analysis] No violations found - all restrictions satisfied")
         return violations
     
     def test_gamma_impact(self, gamma_values: List[float], simulation_runner):
@@ -493,18 +720,25 @@ class RestrictionForTimeFrameController(RestrictionController):
         if self.gamma_integrator is None:
             self.enable_gamma_control()
         
-        print(f"🧪 TESTING GAMMA IMPACT ON VIOLATIONS")
+        print(f"[Gamma Testing] Testing {len(gamma_values)} gamma values: {gamma_values}")
+        
         return self.gamma_integrator.test_gamma_values(gamma_values, simulation_runner)
     
     def get_violation_summary(self):
         """Get summary of last analyzed violations."""
-        return {
+        summary = {
             'escape_edges_count': len(self.last_escape_edges),
             'violations_count': len(self.last_violations),
             'total_violation_flow': sum(v['flow'] for v in self.last_violations),
             'total_penalty_cost': sum(v['penalty_cost'] for v in self.last_violations),
             'violated_edges': [(v['source'], v['dest']) for v in self.last_violations]
         }
+        
+        print(f"[Violation Summary] Escape edges: {summary['escape_edges_count']}, Violations: {summary['violations_count']}, Flow: {summary['total_violation_flow']}, Cost: {summary['total_penalty_cost']}")
+        if summary['violated_edges']:
+            print(f"  Violated edges: {summary['violated_edges']}")
+        
+        return summary
     
     # --- OMEGA ACCESS METHODS ---
     def get_omega(self) -> List[List[Tuple[int, int, int, int, int]]]:
@@ -522,3 +756,34 @@ class RestrictionForTimeFrameController(RestrictionController):
     def set_omega(self, omega: List[Tuple[int, int, int, int, int]]) -> None:
         """Set the omega data structure"""
         self._omega = omega
+
+    def _print_restriction_info(self, idx: int, restriction_item: tuple) -> None:
+        """Print restriction information in a formatted way."""
+        restriction_edges_config, start_time_frame, end_time_frame, U, priority, gamma_config, k_val = self.restriction_parser(restriction_item)
+        
+        print(f"[Restriction #{idx + 1}] Timeframe: [{start_time_frame}, {end_time_frame}], Max AGVs: {U}, Priority: {priority}, Gamma: {gamma_config if gamma_config else 'AUTO'}, K: {k_val}, Edges: {len(restriction_edges_config)}")
+
+    def print_all_restrictions(self) -> None:
+        """Print all current restrictions in a formatted way."""
+        if not self.restrictions:
+            print("[Restrictions] No restrictions currently defined")
+            return
+        
+        print(f"[Restrictions Overview] Total: {len(self.restrictions)}")
+        
+        for idx, restriction_item in enumerate(self.restrictions):
+            self._print_restriction_info(idx, restriction_item)
+    
+    def get_virtual_node_demands(self) -> Dict[int, int]:
+        """
+        Get mapping of virtual node IDs to their demand values.
+        Returns: Dict where key is node_id and value is demand (positive for source, negative for sink)
+        """
+        return self._virtual_node_demands.copy()
+    
+    def get_virtual_node_demand(self, node_id: int) -> int:
+        """
+        Get demand value for a specific virtual node.
+        Returns: demand value, or 0 if node is not a virtual restriction node
+        """
+        return self._virtual_node_demands.get(node_id, 0)

@@ -1390,7 +1390,20 @@ class GraphProcessor:
             for node in self.ts_nodes:
                 if isinstance(node, (ArtificialNode)):
                     file.write(f"c Node {node.id} is ArtificialNode\n")
-                demand = 1 if node.id in self.started_nodes else -1 if node.id in [target.id for target in self.target_nodes] else 0
+                
+                # Check if this is a virtual restriction node with specific demand
+                virtual_demand = 0
+                if self.restriction_controller and hasattr(self.restriction_controller, 'get_virtual_node_demand'):
+                    virtual_demand = self.restriction_controller.get_virtual_node_demand(node.id)
+                
+                # Calculate demand: virtual nodes have their specific demand, others follow original logic
+                if virtual_demand != 0:
+                    demand = virtual_demand
+                    if self.print_out:
+                        print(f"Virtual restriction node {node.id}: demand = {demand}")
+                else:
+                    demand = 1 if node.id in self.started_nodes else -1 if node.id in [target.id for target in self.target_nodes] else 0
+                    
                 print("started node", self.started_nodes)
                 file.write(f"n {node.id} {demand}\n")
             

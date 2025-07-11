@@ -1,3 +1,0 @@
-# Raw
-
-Raw experiment data
